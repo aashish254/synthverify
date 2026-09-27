@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SynthVerify Console</title>
+<style>
+  :root {
+    --bg: #0e1117; --panel: #161b26; --panel2: #1d2331; --line: #2a3245;
+    --text: #e6ebf4; --muted: #8b96ab; --accent: #4f8cff;
+    --low: #2fbf71; --medium: #f2b544; --high: #f2704f; --critical: #e64545;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; font-weight: 650; letter-spacing: .3px; }
+  header h1 span { color: var(--accent); }
+  header .spacer { flex: 1; }
+  header input { background: var(--panel2); border: 1px solid var(--line); color: var(--text); padding: 7px 10px; border-radius: 8px; width: 320px; }
+  header button { background: var(--accent); border: 0; color: white; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  nav { display: flex; gap: 4px; padding: 0 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  nav button { background: none; border: 0; color: var(--muted); padding: 10px 14px; cursor: pointer; font-size: 13.5px; border-bottom: 2px solid transparent; }
+  nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 20px 24px; max-width: 1280px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+  .card .v { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  .card .v.t-HIGH { color: var(--high); } .card .v.t-CRITICAL { color: var(--critical); }
+  .card .v.t-MEDIUM { color: var(--medium); } .card .v.t-LOW { color: var(--low); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th { text-align: left; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  tr:hover td { background: var(--panel2); cursor: pointer; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
+  .b-LOW { background: rgba(47,191,113,.15); color: var(--low); }
+  .b-MEDIUM { background: rgba(242,181,68,.15); color: var(--medium); }
+  .b-HIGH { background: rgba(242,112,79,.15); color: var(--high); }
+  .b-CRITICAL { background: rgba(230,69,69,.18); color: var(--critical); }
+  .b-status { background: var(--panel2); color: var(--muted); border: 1px solid var(--line); }
+  .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .muted { color: var(--muted); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 16px; }
+  .panel h3 { margin-bottom: 10px; font-size: 15px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .det { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel2); margin-bottom: 10px; }
+  .det .head { display: flex; justify-content: space-between; align-items: center; }
+  .bar { height: 6px; border-radius: 4px; background: var(--line); margin-top: 8px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent); }
+  .flag { display: inline-block; background: rgba(230,69,69,.12); color: var(--critical); border: 1px solid rgba(230,69,69,.3); padding: 2px 8px; border-radius: 6px; font-size: 11.5px; margin: 2px 4px 2px 0; }
+  ul.findings { padding-left: 18px; color: var(--text); }
+  ul.findings li { margin: 4px 0; color: var(--muted); }
+  .btn { background: var(--panel2); border: 1px solid var(--line); color: var(--text); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .btn.primary { background: var(--accent); border: 0; color: white; font-weight: 600; }
+  .btn.danger { color: var(--critical); }
+  form.inline { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  form.inline input, form.inline select { background: var(--panel2); border: 1px solid var(--line); color: var(--text); padding: 7px 10px; border-radius: 8px; }
+  #toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px; display: none; }
+  .score-donut { font-size: 30px; font-weight: 800; }
+  .hidden { display: none; }
+  code { background: var(--panel2); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+  .art-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .art { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .art img { width: 100%; image-rendering: pixelated; border-radius: 6px; background: #000; display: block; }
+  .art .cap { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>◈ Synth<span>Verify</span> Console</h1>
+  <div class="spacer"></div>
+  <input id="apiKey" type="password" placeholder="API key (sv_live_…)">
+  <button onclick="saveKey()">Connect</button>
+</header>
+<nav>
+  <button data-tab="overview" class="active">Overview *</button>
+  <button data-tab="jobs">Verification Jobs</button>
+  <button data-tab="keys">API Keys *</button>
+  <button data-tab="webhooks">Webhooks *</button>
+  <button data-tab="audit">Audit Ledger *</button>
+</nav>
+<p class="muted" style="margin:10px 16px 0">* reads the platform control plane (<code>/api/v1/admin/**</code>), so it needs the
+operator's platform-scoped key. Verification Jobs runs on any organisation's own key and shows only
+that organisation's queue.</p>
+<main>
+  <section id="tab-overview"></section>
+  <section id="tab-jobs" class="hidden"></section>
+  <section id="tab-keys" class="hidden"></section>
+  <section id="tab-webhooks" class="hidden"></section>
+  <section id="tab-audit" class="hidden"></section>
+</main>
+<div id="toast"></div>
+<script>
+const $ = (s, el=document) => el.querySelector(s);
+let tab = 'overview';
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
+  ['overview','jobs','keys','webhooks','audit'].forEach(t => $('#tab-'+t).classList.toggle('hidden', t !== tab));
+  render();
+});
+
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display='block'; setTimeout(()=>t.style.display='none', 2600); }
+function saveKey() { localStorage.setItem('sv_key', $('#apiKey').value.trim()); toast('API key saved locally'); render(); }
+const KEY = () => localStorage.getItem('sv_key') || '';
+async function api(path, opts={}) {
+  const resp = await fetch(path, {...opts, headers: {'X-API-Key': KEY(), 'Content-Type':'application/json', ...(opts.headers||{})}});
+  if (!resp.ok) { const body = await resp.json().catch(()=>({})); throw new Error(body.detail || body.error || resp.status); }
+  return resp.json();
+}
+const tierBadge = t => t ? `<span class="badge b-${t}">${t}</span>` : '<span class="badge b-status">—</span>';
+const statusBadge = s => `<span class="badge b-status">${s}</span>`;
+
+async function render() {
+  if (!KEY()) { $('#tab-'+tab).innerHTML = '<div class="panel">Paste an API key above to connect. Any organisation key fills this table; the tabs marked * need the platform key.</div>'; return; }
+  try {
+    if (tab==='overview') await renderOverview();
+    if (tab==='jobs') await renderJobs();
+    if (tab==='keys') await renderKeys();
+    if (tab==='webhooks') await renderWebhooks();
+    if (tab==='audit') await renderAudit();
+  } catch (e) { $('#tab-'+tab).innerHTML = `<div class="panel">⚠ ${e.message}</div>`; }
+}
+
+async function renderOverview() {
+  const s = await api('/api/v1/admin/stats');
+  const tierCards = ['LOW','MEDIUM','HIGH','CRITICAL'].map(t =>
+    `<div class="card"><div class="k">${t}</div><div class="v t-${t}">${s.jobs_by_risk_tier[t]||0}</div></div>`).join('');
+  $('#tab-overview').innerHTML = `
+    <div class="cards">
+      <div class="card"><div class="k">Completed</div><div class="v">${s.jobs_by_status.completed||0}</div></div>
+      <div class="card"><div class="k">Queued</div><div class="v">${s.jobs_by_status.queued||0}</div></div>
+      <div class="card"><div class="k">Failed</div><div class="v">${s.jobs_by_status.failed||0}</div></div>
+      <div class="card"><div class="k">Queue depth</div><div class="v">${s.queue_depth}</div></div>
+      <div class="card"><div class="k">Avg pipeline</div><div class="v">${s.avg_pipeline_ms||'—'}<small> ms</small></div></div>
+      <div class="card"><div class="k">Uptime</div><div class="v">${Math.round(s.uptime_seconds/60)}<small> min</small></div></div>
+    </div>
+    <h3 style="margin:6px 0 10px">Risk tier distribution</h3>
+    <div class="cards">${tierCards}</div>
+    <div class="panel"><h3>Workflow actions on recent completions</h3>
+      ${Object.entries(s.jobs_by_recommended_action).map(([a,c])=>`<div><b>${a}</b> — ${c}</div>`).join('') || '<span class="muted">No completed jobs yet.</span>'}
+    </div>`;
+}
+
+const jobFilters = { status: '', tier: '', media: '' };
+function setJobFilter(k, v) { jobFilters[k] = v; renderJobs(); }
+function resetJobFilters() { jobFilters.status = jobFilters.tier = jobFilters.media = ''; renderJobs(); }
+
+async function renderJobs() {
+  const qs = new URLSearchParams({ limit: '50' });
+  if (jobFilters.status) qs.set('status', jobFilters.status);
+  if (jobFilters.tier) qs.set('risk_tier', jobFilters.tier);
+  if (jobFilters.media) qs.set('media_type', jobFilters.media);
+  const data = await api('/api/v1/jobs?' + qs);
+  const sel = (key, label, opts) => `
+    <select onchange="setJobFilter('${key}', this.value)">
+      <option value=''>${label}: all</option>
+      ${opts.map(o => `<option value="${o}" ${jobFilters[key]===o?'selected':''}>${o}</option>`).join('')}
+    </select>`;
+  $('#tab-jobs').innerHTML = `
+    <div class="panel" style="margin:0 0 14px">
+      <form class="inline" style="margin:0" onsubmit="event.preventDefault(); renderJobs()">
+        ${sel('status','Status',['queued','running','completed','failed'])}
+        ${sel('tier','Risk tier',['LOW','MEDIUM','HIGH','CRITICAL'])}
+        ${sel('media','Media type',['image','audio','video','text'])}
+        <button class="btn">Apply</button>
+        <button class="btn" type="button" onclick="resetJobFilters()">Reset</button>
+        <span class="muted" style="align-self:center">${data.total} matching job${data.total===1?'':'s'}</span>
+      </form>
+    </div>
+    <table><thead><tr><th>Job</th><th>File</th><th>Type</th><th>Status</th><th>Risk</th><th>Tier</th><th>Action</th><th>Created</th></tr></thead>
+    <tbody>${data.items.map(j => `<tr onclick="showJob('${j.job_id}')">
+      <td class="mono">${j.job_id.slice(0,8)}…</td>
+      <td>${(j.media&&j.media.filename)||'—'}</td>
+      <td class="muted">${(j.media&&j.media.media_type)||'—'}</td>
+      <td>${statusBadge(j.status)}</td>
+      <td>${j.risk_score!=null ? j.risk_score.toFixed(3) : '—'}</td>
+      <td>${tierBadge(j.risk_tier)}</td>
+      <td class="muted">${j.recommended_action || '—'}</td>
+      <td class="muted">${(j.created_at||'').slice(0,19).replace('T',' ')}</td>
+    </tr>`).join('')}</tbody></table>
+    <div id="jobDetail"></div>`;
+}
+
+const artifactUrls = [];
+async function imgAuth(el, url) {
+  // <img> can't send the X-API-Key header — fetch the bytes with auth and swap in a blob URL
+  const resp = await fetch(url, { headers: { 'X-API-Key': KEY() } });
+  if (!resp.ok) { el.closest('.art').innerHTML = '<span class="muted">⚠ artifact unavailable</span>'; return; }
+  const blobUrl = URL.createObjectURL(await resp.blob());
+  artifactUrls.push(blobUrl);
+  el.src = blobUrl;
+}
+
+async function showJob(id) {
+  artifactUrls.splice(0).forEach(u => URL.revokeObjectURL(u));
+  const j = await api('/api/v1/jobs/'+id);
+  const r = j.result || {};
+  const v = r.verdict || {};
+  const detHtml = (r.detectors||[]).map(d => `
+    <div class="det">
+      <div class="head"><b>${d.detector}</b><span class="mono muted">score ${d.score.toFixed(2)} · conf ${d.confidence.toFixed(2)} · ${d.status}</span></div>
+      <div class="bar"><div style="width:${(d.score*100).toFixed(0)}%"></div></div>
+      <ul class="findings">${(d.findings||[]).map(f=>`<li>${f}</li>`).join('')}</ul>
+    </div>`).join('');
+  $('#jobDetail').innerHTML = `
+    <div class="panel">
+      <h3>Job <span class="mono">${j.job_id}</span> ${tierBadge(j.risk_tier)} ${statusBadge(j.status)}</h3>
+      <div class="grid2">
+        <div>
+          <div class="score-donut" style="color:${j.risk_tier==='LOW'?'var(--low)':j.risk_tier==='MEDIUM'?'var(--medium)':j.risk_tier==='HIGH'?'var(--high)':'var(--critical)'}">
+            ${(j.risk_score??0).toFixed(3)}</div>
+          <div class="muted">fused risk score / 1.00 · confidence ${(j.confidence??0).toFixed(2)} · coverage ${((j.detector_coverage??0)*100).toFixed(0)}%
+            ${r.policy_name ? ` · policy <code>${r.policy_name}</code>` : ''}</div>
+          <p style="margin-top:10px"><b>${v.summary||''}</b></p>
+          <p class="muted" style="margin-top:6px">${(v.action_rationale||'')}</p>
+          <div style="margin-top:10px">${(r.flags||[]).map(f=>`<span class="flag" title="${(r.flag_explanations||{})[f]||''}">${f}</span>`).join('')}</div>
+          <h3 style="margin-top:16px">Narrative</h3>
+          ${(r.narrative||[]).map(p=>`<p class="muted" style="margin-bottom:8px">${p}</p>`).join('')}
+        </div>
+        <div>
+          <h3 style="margin-bottom:10px">Detector breakdown</h3>
+          ${detHtml || '<span class="muted">No report yet.</span>'}
+        </div>
+      </div>
+      <div id="artifacts"></div>
+    </div>`;
+  $('#jobDetail').scrollIntoView({behavior:'smooth'});
+  loadArtifacts(id);
+}
+
+async function loadArtifacts(id) {
+  const box = $('#artifacts');
+  let items = [];
+  try { items = (await api(`/api/v1/jobs/${id}/artifacts`)).items; } catch (e) { return; }
+  if (!box || !items.length) return;
+  box.innerHTML = `<h3 style="margin:18px 0 10px">Forensic artifacts</h3>
+    <div class="art-grid">${items.map(a => `
+      <div class="art">
+        <div class="cap"><b>${a.detector}</b><span class="muted mono">${a.name}</span></div>
+        <img alt="${a.name}">
+      </div>`).join('')}</div>`;
+  // an <img> with no src never fires `load`, so drive the authenticated fetch here
+  const imgs = box.querySelectorAll('.art img');
+  items.forEach((a, i) => { if (imgs[i]) imgAuth(imgs[i], a.url); });
+}
+
+async function renderKeys() {
+  const data = await api('/api/v1/admin/keys');
+  $('#tab-keys').innerHTML = `
+    <div class="panel">
+      <h3>Create API key</h3>
+      <form class="inline" onsubmit="createKey(event)">
+        <input name="name" placeholder="name" required>
+        <select name="role"><option>service</option><option>analyst</option><option>admin</option></select>
+        <input name="org" placeholder="organisation" value="default" style="width:140px">
+        <button class="btn primary">Create</button>
+      </form>
+      <table><thead><tr><th>Key ID</th><th>Name</th><th>Role</th><th>Org</th><th>Active</th><th>Last used</th><th></th></tr></thead>
+      <tbody>${data.items.map(k=>`<tr>
+        <td class="mono">${k.key_id}</td><td>${k.name}</td><td>${k.role}</td><td>${k.organisation}</td>
+        <td>${k.active?'✓':'revoked'}</td><td class="muted">${(k.last_used_at||'never').slice(0,19).replace('T',' ')}</td>
+        <td>${k.active?`<button class="btn danger" onclick="revokeKey('${k.key_id}')">Revoke</button>`:''}</td>
+      </tr>`).join('')}</tbody></table>
+    </div>`;
+}
+async function createKey(ev) {
+  ev.preventDefault();
+  const f = ev.target;
+  const r = await api('/api/v1/admin/keys', {method:'POST', body: JSON.stringify({name:f.name.value, role:f.role.value, organisation:f.org.value})});
+  prompt('COPY THE SECRET NOW — shown only once:', r.key);
+  render();
+}
+async function revokeKey(id) { await api('/api/v1/admin/keys/'+id, {method:'DELETE'}); toast('revoked'); render(); }
+
+async function renderWebhooks() {
+  const data = await api('/api/v1/admin/webhooks');
+  $('#tab-webhooks').innerHTML = `
+    <div class="panel">
+      <h3>Register webhook endpoint</h3>
+      <form class="inline" onsubmit="createHook(event)">
+        <input name="url" placeholder="https://workflow.corp/hooks/sv" required style="width:320px">
+        <input name="events" placeholder="job.completed" value="job.completed">
+        <input name="desc" placeholder="description">
+        <button class="btn primary">Register</button>
+      </form>
+      <p class="muted" style="margin-bottom:10px">Deliveries are signed: <code>X-SynthVerify-Signature: t=&lt;ts&gt;, v1=hmac_sha256(secret, "&lt;ts&gt;.&lt;body&gt;")</code></p>
+      <table><thead><tr><th>ID</th><th>URL</th><th>Events</th><th>Active</th><th></th></tr></thead>
+      <tbody>${data.items.map(w=>`<tr>
+        <td class="mono">${w.id.slice(0,8)}…</td><td>${w.url}</td><td class="muted">${(w.events||[]).join(', ')}</td>
+        <td>${w.active?'✓':'disabled'}</td>
+        <td>
+          <button class="btn" onclick="testHook('${w.id}')">Test</button>
+          <button class="btn" onclick="showDeliveries('${w.id}')">Deliveries</button>
+          <button class="btn danger" onclick="delHook('${w.id}')">Disable</button>
+        </td></tr>`).join('')}</tbody></table>
+      <div id="deliveries"></div>
+    </div>`;
+}
+async function createHook(ev) {
+  ev.preventDefault();
+  const f = ev.target;
+  const r = await api('/api/v1/admin/webhooks', {method:'POST', body: JSON.stringify({url:f.url.value, events:f.events.value.split(',').map(s=>s.trim()), description:f.desc.value})});
+  prompt('COPY THE SIGNING SECRET NOW:', r.secret);
+  render();
+}
+async function delHook(id) { await api('/api/v1/admin/webhooks/'+id, {method:'DELETE'}); render(); }
+async function testHook(id) { const r = await api(`/api/v1/admin/webhooks/${id}/test`, {method:'POST'}); toast(r.delivered ? 'Test delivered ✓' : `Test failed: ${r.error||r.response_code}`); }
+async function showDeliveries(id) {
+  const d = await api(`/api/v1/admin/webhooks/${id}/deliveries`);
+  $('#deliveries').innerHTML = `<h3 style="margin-top:14px">Recent deliveries</h3>
+    <table><thead><tr><th>ID</th><th>Event</th><th>Status</th><th>Attempt</th><th>HTTP</th><th>Error</th></tr></thead>
+    <tbody>${d.items.map(x=>`<tr><td class="mono">${x.id.slice(0,8)}…</td><td>${x.event_type}</td>
+      <td>${statusBadge(x.status)}</td><td>${x.attempt}/${x.max_attempts}</td><td>${x.response_code??'—'}</td>
+      <td class="muted">${(x.error||'').slice(0,80)}</td></tr>`).join('')||'<tr><td colspan="6" class="muted">none</td></tr>'}</tbody></table>`;
+}
+
+async function renderAudit() {
+  const v = await api('/api/v1/admin/audit/verify');
+  const data = await api('/api/v1/admin/audit?limit=100');
+  $('#tab-audit').innerHTML = `
+    <div class="panel">
+      <h3>Hash chain: ${v.verified ? '<span style="color:var(--low)">VERIFIED ✓</span>' : '<span style="color:var(--critical)">TAMPERED</span>'}
+        <span class="muted" style="font-weight:400">(${v.entries_checked} entries)</span></h3>
+      <table><thead><tr><th>#</th><th>Time</th><th>Actor</th><th>Action</th><th>Resource</th><th>Entry hash</th></tr></thead>
+      <tbody>${data.items.map(e=>`<tr>
+        <td>${e.seq}</td><td class="muted">${(e.ts||'').slice(0,19).replace('T',' ')}</td>
+        <td>${e.actor}</td><td><code>${e.action}</code></td><td class="mono">${e.resource||''}</td>
+        <td class="mono muted">${e.entry_hash.slice(0,16)}…</td></tr>`).join('')}</tbody></table>
+    </div>`;
+}
+
+window.onload = () => { $('#apiKey').value = KEY() || ''; render(); };
+</script>
+</body>
+</html>

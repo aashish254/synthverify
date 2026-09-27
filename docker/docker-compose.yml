@@ -1,0 +1,42 @@
+# SynthVerify - single-container deployment with persistent data volume.
+# For production scale: SV_DATABASE_URL at PostgreSQL with SV_JOB_BROKER=postgres and a separate worker
+# tier (compose-scale.yml), plus SV_RATE_LIMIT_BACKEND=valkey so the budget is shared rather than per
+# replica — Valkey (BSD-3), because Redis >= 7.4 is RSALv2/SSPL and FC-1 admits permissive licences only.
+services:
+  synthverify:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: synthverify:1.0.0
+    container_name: synthverify
+    ports:
+      - "8080:8080"
+    environment:
+      SV_ENVIRONMENT: production
+      SV_DATABASE_URL: sqlite:////app/data/synthverify.db
+      # Generate a strong key for the first boot, e.g.:
+      #   python -c "import secrets; print('sv_live_' + secrets.token_hex(16))"
+      SV_BOOTSTRAP_ADMIN_KEY: ${SV_BOOTSTRAP_ADMIN_KEY:-}
+      SV_WORKER_COUNT: "4"
+      SV_RATE_LIMIT_RPM: "240"
+    volumes:
+      - sv-data:/app/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  # Optional PostgreSQL for multi-replica deployments:
+  # postgres:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_DB: synthverify
+  #     POSTGRES_USER: sv
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #   volumes:
+  #     - pg-data:/var/lib/postgresql/data
+  # synthverify:
+  #   environment:
+  #     SV_DATABASE_URL: postgresql+psycopg://sv:${POSTGRES_PASSWORD}@postgres:5432/synthverify
+
+volumes:
+  sv-data:

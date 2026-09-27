@@ -1,0 +1,210 @@
+# SynthVerify alert rules (`REQ-INFRA-6` / `AC-INFRA-6`) — load this into self-hosted Prometheus.
+#
+#     # prometheus.yml
+#     rule_files:
+#       - /etc/prometheus/synthverify-alerts.yml   # this file, mounted or copied
+#
+# Why it lives in the repo rather than in a dashboard: `AC-INFRA-6` asks for rules that "ship as a file
+# and parse", and a rule that only exists in someone's Grafana cannot be reviewed, versioned or checked
+# against the code. `synthverify alert-rules` (and `make alerts`, and `tests/test_tracing.py`) fails when
+# a name below is not a metric this build really emits, which is the drift that makes a rule silently
+# never fire.
+#
+# Every identifier here is a metric from `synthverify/metrics.py:HELP_TEXTS`, scraped from
+# `/metrics` with `Accept: application/openmetrics-text` when you want the trace exemplars attached.
+# There are deliberately no recording rules: a recorded series is *produced* by Prometheus, so adding
+# one would put a name in this file that the cross-check above cannot verify against the product.
+#
+# The thresholds are starting points for a CPU-only deployment, not measured SLOs — the spec sets no
+# numbers for alerting (§4.3 names the mechanism only), and inventing a latency budget here would be a
+# claim this repo has not earned. Adjust per organisation before paging anyone.
+
+groups:
+  - name: synthverify.availability
+    rules:
+      - alert: SynthVerifyTargetMissing
+        expr: absent(synthverify_up)
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No SynthVerify replica is answering /metrics"
+          description: >-
+            Prometheus has not scraped `synthverify_up` for 3 minutes, which means either the process
+            is down or `/metrics` is unreachable. Verify over HTTP before paging: `GET /healthz` is
+            liveness and `GET /readyz` names the database, the job broker and the rate-limit backend.
+
+      - alert: SynthVerifyServerErrorRate
+        expr: >-
+          sum(rate(synthverify_http_requests_total{status=~"5.."}[5m]))
+          / clamp_min(sum(rate(synthverify_http_requests_total[5m])), 1) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 1% of requests are failing with 5xx"
+          description: >-
+            The counter is labelled by method, route template and status, so the alert's `sum` hides
+            nothing that a `by (path)` breakdown cannot show. Each series carries an exemplar with the
+            `trace_id` of a request that incremented it: scrape with
+            `Accept: application/openmetrics-text` and `enable_exemplars: true` to jump from the spike
+            to one request's audit rows. `clamp_min` keeps the ratio at zero rather than NaN when the
+            endpoint has had no traffic at all.
+
+  - name: synthverify.pipeline
+    rules:
+      - alert: SynthVerifyJobsFailing
+        expr: sum(increase(synthverify_jobs_failed_total[15m])) > 5
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Verification jobs are reaching a terminal failure"
+          description: >-
+            `reason` separates `pipeline_error` (unsupported or unreadable media, an unknown detector —
+            usually a client problem) from `exception` (our problem). The failed job's `job.failed`
+            ledger row carries the same `trace_id` its ingest request did, and its error text.
+
+      - alert: SynthVerifyNoVerdicts
+        expr: absent_over_time(synthverify_jobs_completed_total[15m])
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No job has reached a verdict in 15 minutes"
+          description: >-
+            A queue that accepts work and never finishes it. `GET /readyz` reports `job_broker`,
+            `durable_queue` and `queue_depth` from local state only, so it stays answerable; compare
+            `synthverify_jobs_enqueued_total` against `synthverify_jobs_claimed_total` to tell an empty
+            inbox from workers that are not picking anything up.
+
+      - alert: SynthVerifyLeasesReclaimed
+        expr: sum(increase(synthverify_jobs_leases_expired_total[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A worker's job lease lapsed and the queue handed the job to someone else"
+          description: >-
+            Either a replica died mid-job or the pipeline outlived its lease. Watch it together with
+            `SynthVerifyFencedOutcome` — the pair is the story of a job two replicas touched, and the
+            `claimed_by` column says who ran it last.
+
+      - alert: SynthVerifyFencedOutcome
+        expr: sum(increase(synthverify_jobs_fenced_total[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A worker tried to write a verdict it no longer owned"
+          description: >-
+            The write matched zero rows because the lease token had moved. This is the exactly-once
+            guarantee (`AC-INFRA-2`) working, not failing: the loser's result is dropped rather than
+            overwriting the winner's. Repeated occurrences mean the lease is shorter than the pipeline.
+
+      - alert: SynthVerifyWorkerPanics
+        expr: sum(increase(synthverify_worker_panics_total[10m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A worker loop caught an unexpected exception"
+          description: >-
+            The fleet survives by design — the loop logs, counts and keeps claiming — but a panic here
+            means a path that was supposed to record an outcome did not. `where` says whether it was in
+            the claim or in the job.
+
+      - alert: SynthVerifySlowPipeline
+        expr: synthverify_pipeline_last_duration_ms > 30000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The most recent pipeline run took over 30 seconds"
+          description: >-
+            A gauge of this process's last run, so it moves only while work is arriving; on CPU-only
+            inference it is the earliest sign that detector selection, media size or a missing optional
+            dependency is costing more than expected. Not a latency SLO — see the header note.
+
+  - name: synthverify.free-infrastructure
+    rules:
+      - alert: SynthVerifyRateLimitDegraded
+        expr: sum(increase(synthverify_rate_limit_fallback_total[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The shared rate-limit bucket was unreachable, so the limit went local"
+          description: >-
+            `AC-INFRA-3(b)`'s degradation path: requests keep being served and refused, but under a
+            per-process budget instead of the global one, which is exactly the "n replicas times the
+            limit" failure the shared backend exists to prevent. `GET /readyz` reports
+            `rate_limit_degraded` without contacting the backend, so this alert is the one that notices
+            an outage nothing else surfaces.
+
+      - alert: SynthVerifyRequestsRefused
+        expr: >-
+          sum(rate(synthverify_rate_limited_total[5m]))
+          / clamp_min(sum(rate(synthverify_http_requests_total[5m])), 1) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 20% of requests are being rate limited"
+          description: >-
+            For a service whose public tiers are free at the point of use, refusals are the signal that
+            a budget is set wrong or that one subject is consuming it. The `subject` label is a prefix
+            of the API key id, not the secret.
+
+      - alert: SynthVerifyWebhookBacklog
+        expr: sum(increase(synthverify_webhook_retry_errors_total[15m])) > 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The webhook retry loop keeps failing to deliver"
+          description: >-
+            Verdicts are still durable — they live in the job and its ledger row — but the enterprise
+            workflow that asked to be told has not been. `GET /api/v1/admin/webhooks/{id}/deliveries`
+            shows per-attempt state and response codes.
+
+      - alert: SynthVerifyExemplarsDropped
+        expr: sum(increase(synthverify_metrics_exemplars_dropped_total[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A metric increment arrived with an exemplar this build refuses to render"
+          description: >-
+            The registry only accepts a 32-hex `trace_id` and a 16-hex `span_id`, because the value came
+            from a caller-controlled `traceparent` header and is about to become a label. A rising count
+            means someone is sending malformed trace headers — or that trace validation has been
+            weakened, which is the case `scripts/trace_e2e.py --mutate lenient-parser` exists to catch.
+
+      - alert: SynthVerifyAuthRejections
+        expr: >-
+          sum(rate(synthverify_auth_requests_total{outcome="rejected"}[5m]))
+          / clamp_min(sum(rate(synthverify_auth_requests_total[5m])), 1) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 10% of authentications are being rejected"
+          description: >-
+            A revoked key, a typo in an integration, or probing. Roles are `admin`, `analyst` and
+            `service`, and every admitted call is authenticated by a hash of its key rather than the
+            key itself.
+
+      - alert: SynthVerifyRetentionSweepFailing
+        expr: sum(increase(synthverify_retention_sweep_errors_total[1h])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A retention pass failed, so configured TTLs are not being enforced"
+          description: >-
+            The scheduler survives a failed pass on purpose — one bad pass must not stop enforcing every
+            tenant's policy — which is exactly why the failure needs a page rather than only a log line.
+            Nothing was deleted wrongly: the sweep did not run, so an organisation's past-due media is
+            still on disk. Read the plan before deciding anything — `synthverify retention-sweep` previews
+            and deletes nothing, as does `POST /api/v1/admin/retention/sweep` with `dry_run` left unset.

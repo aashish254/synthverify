@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/aashish254/synthverify/security/advisories/new
+    about: >
+      Tenant isolation, audit-chain tampering, unexpected network egress, credential handling.
+      Private by default; read SECURITY.md for what counts as in scope.
+  - name: Conduct report
+    url: https://github.com/aashish254/synthverify/security/advisories/new
+    about: Reported through the same private channel - see CODE_OF_CONDUCT.md.
+  - name: How the gates work
+    url: https://github.com/aashish254/synthverify/blob/main/CONTRIBUTING.md
+    about: Why every check here has a mutation run, and what a PR has to carry.

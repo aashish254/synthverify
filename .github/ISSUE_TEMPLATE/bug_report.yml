@@ -1,0 +1,90 @@
+name: Bug report
+description: Something that ran printed something it should not have
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        This project grades claims by what a command printed, so the most useful thing you can paste
+        is output. Trim it to the failing part; do not paraphrase it. If the problem is a security
+        boundary (tenant isolation, audit tampering, egress), please use private vulnerability
+        reporting instead - see SECURITY.md.
+  - type: textarea
+    id: command
+    attributes:
+      label: The command you ran
+      description: Exactly as typed, including environment variables.
+      render: shell
+      placeholder: |
+        SV_ENVIRONMENT=production SV_JOB_BROKER=postgres make run
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: What it printed
+      description: The tail of stdout and stderr, verbatim.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: >
+        Name the acceptance criterion if you can - docs/goal-spec.md §4 has them, and a claim of the
+        form "AC-IDAM-3 says one organisation cannot read another's job" is worth a page of prose.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: make doctor output
+      description: "`make doctor` (or `python scripts/doctor.py` on Windows) names the environment's shape."
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`git rev-parse --short HEAD`, or the release tag."
+      placeholder: v1.0.0 / 4f2a1c9
+    validations:
+      required: true
+  - type: dropdown
+    id: dialect
+    attributes:
+      label: Database in play
+      options: [SQLite (default), PostgreSQL, Valkey for the limiter, Not applicable]
+      multiple: true
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and Python
+      description: "`uname -sr; python3 -VV` (or the PowerShell equivalent)."
+      placeholder: macOS 14.5 arm64, Python 3.11.9
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Smallest thing that reproduces it
+      description: >
+        A file, a request sequence, a job count. Sized so the bug must appear: a race that needs 200
+        jobs to show is worth saying so, because "did not reproduce in 20" is not evidence either way.
+    validations:
+      required: false
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Before submitting
+      options:
+        - label: I ran `make test` and recorded which cases failed
+          required: true
+        - label: I searched open and closed issues, including the Known limitations section of README.md
+          required: true
+        - label: I removed any API key, webhook secret or media that is not mine to publish
+          required: true

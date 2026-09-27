@@ -1,0 +1,28 @@
+# The product image plus the PostgreSQL driver - i.e. the image a multi-replica deployment runs.
+#
+# Why an overlay instead of adding the driver to `docker/Dockerfile`: the default image is also what
+# `make airgap` seals and what a single-node install uses, and both must stay copyleft-free by
+# declaration (§6.1 note 4, and the FC-1 scan). The scale stack is the one place an operator has
+# opted into Postgres, so that is where the driver enters - and the build proves the claim, because
+# a base image with no driver cannot reach the database at all.
+#
+#     docker build -f docker/Dockerfile.postgres --build-arg BASE=synthverify:ci -t synthverify:scale .
+ARG BASE=synthverify:ci
+FROM ${BASE}
+
+USER root
+
+COPY docker/requirements-postgres.txt /tmp/requirements-postgres.txt
+COPY docker/requirements-lock.txt /tmp/requirements-lock.txt
+# `-c` alongside `-r`: the driver is pinned by this file, but its own dependencies are not, and an
+# unpinned transitive upgrade would silently change the locked package set one layer after the lock
+# was applied. Constraints keep the overlay additive - it can add psycopg and psycopg-binary, never
+# move something the base image already pinned.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -c /tmp/requirements-lock.txt -r /tmp/requirements-postgres.txt \
+    && rm /tmp/requirements-postgres.txt /tmp/requirements-lock.txt
+
+# Proven at build time, not at first boot: an unreadable driver is a broken deployment either way.
+RUN python -c "import psycopg; print('psycopg', psycopg.__version__)"
+
+USER svuser

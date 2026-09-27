@@ -1,0 +1,79 @@
+name: Feature or requirement
+description: Something this pipeline should do that it does not
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Requirements here are written as acceptance criteria with a test that can fail
+        (`docs/goal-spec.md` §4), and the Freedom Constraints in §5 decide what the product is
+        allowed to become. Saying which criterion a request serves - or that it serves none - is
+        what makes it answerable.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do that you cannot do
+      description: The job and the constraint, not the implementation. "I cannot hand the ledger to an auditor who must not have DB write access" beats "add S3 export".
+    validations:
+      required: true
+  - type: dropdown
+    id: requirement
+    attributes:
+      label: Which requirement does this serve?
+      options:
+        - "REQ-DET-* (detectors and evidence)"
+        - "REQ-XAI-* (explanation and narratives)"
+        - "REQ-IDAM-* (identity, access, audit)"
+        - "REQ-INFRA-* (infrastructure)"
+        - "REQ-RT-* (real-time and throughput)"
+        - "REQ-OPS-* (operations)"
+        - "REQ-PUBLIC-* / REQ-REACH-* (public-interest access and reach)"
+        - "None - it is a new requirement"
+        - "I do not know"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: How would you know it works?
+      description: >
+        Try to write it as one testable sentence, the way AC-* reads. Include the number that makes
+        the instrument big enough to see the failure - a check that passes at 20 items when the bug
+        needs 2 000 is not a check.
+      placeholder: |
+        AC-IDAM-5: a checkpoint file handed to a third party verifies against a ledger the third
+        party cannot write to, and rejects a ledger re-hashed from seq 40 000 onward.
+    validations:
+      required: true
+  - type: dropdown
+    id: freedom
+    attributes:
+      label: Does it touch a Freedom Constraint?
+      description: "FC-1 licences, FC-3 open models, FC-4 offline. `make freedom` is the arbiter."
+      options:
+        - "No new dependency, no network call, no model"
+        - "It adds a dependency (FC-1 grades it)"
+        - "It adds or needs a model (FC-3 needs open weights and per-group error rates)"
+        - "It needs the network at analysis time (FC-4 - this usually ends the request)"
+        - "Unsure"
+      multiple: true
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Including the `make` targets and CLI flags you read about in README.md §4.
+    validations:
+      required: false
+  - type: textarea
+    id: contribution
+    attributes:
+      label: Are you building it?
+      description: >
+        Not a requirement - but a PR that arrives with its mutation harness tends to land faster, and
+        CONTRIBUTING.md describes what one has to look like.
+      render: text
+      placeholder: "I can take this. Which file should the check live in?"
+    validations:
+      required: false

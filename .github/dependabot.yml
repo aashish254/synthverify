@@ -1,0 +1,20 @@
+# Deliberately narrow: GitHub Actions only.
+#
+# Python is excluded on purpose. `docker/requirements-lock.txt` is a *generated* artifact -
+# `synthverify dependency-lock --write` produces it from `pyproject.toml` - and the T39 gate fails
+# when the two disagree in either direction. A bot that widens a range in `pyproject.toml` without
+# regenerating the lock opens a pull request that cannot be made green by editing the pull request:
+# the fix is a local `./.venv/bin/python -m synthverify.cli dependency-lock --write` against an
+# environment pip resolved from the edited declaration, which a bot should not guess at.
+#
+# So dependency updates are a maintainer action, and `make lock-check` is the arbiter. This file
+# keeps the runners current, which nothing else here does.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"

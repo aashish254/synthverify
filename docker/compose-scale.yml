@@ -1,0 +1,155 @@
+# ---------------------------------------------------------------------------
+# AC-INFRA-2: the two-replica run. Postgres holds the queue, the API replicas hold no queue at
+# all, and a separate tier drains the work - which is the only shape where "exactly once" is a
+# claim about a database rather than about a process.
+#
+#     SV_SCALE_ADMIN_KEY=sv_live_... make scale            # or: scripts/scale_e2e.py
+#
+# Nothing here is published on a public interface: the ports are bound to 127.0.0.1, and the
+# Postgres port exists only so the *verifier* can read the outcome with a BSD driver while the
+# product writes through psycopg (docs/goal-spec.md §6.1 note 4).
+#
+# Why the services start in this order, and why that is not laziness:
+#   postgres -> migrate -> api1 -> {api2, worker1, worker2}
+# Boot runs `Base.metadata.create_all()` and mints the bootstrap admin key, and both are
+# single-writer by construction - four replicas racing to `CREATE TABLE` or to insert the same
+# `key_id` is a deployment that fails on first boot, not one that works. A one-shot `db-upgrade`
+# owns the schema and `api1` owns the key; everything else waits for `api1` to be healthy. That is
+# also the honest answer to "is your migration story a container restart?": it is a one-shot job
+# with `service_completed_successfully`, the shape an operator can run as a Job/Task.
+#
+# The two API replicas are declared separately rather than `--scale`d because each needs its own
+# published port for the script to act as the load balancer. Swap them for `deploy.replicas` and a
+# proxy when you stop testing them and start serving traffic.
+#
+# Every app service also pins `hostname`. `jobs.claimed_by` is read back as evidence by
+# `scripts/scale_e2e.py`, and a container's default hostname is a generated id - "exactly two
+# replicas ran these 200 jobs" is only legible when the identity names the service.
+#
+# SV_SCALE_* variables are the script's knobs; their defaults are the topology AC-INFRA-2 names.
+# The `--embedded` and `--without-workers` mutations are the same file with different values, which
+# is why the failure modes are configuration and not edited YAML.
+# ---------------------------------------------------------------------------
+
+name: sv-scale
+
+x-app: &app
+  image: ${SV_SCALE_IMAGE:-synthverify:scale}
+  security_opt:
+    - no-new-privileges:true
+  # The replica that ingests is not the replica that processes, so the evidence bytes have to be
+  # readable by both. One shared volume is the whole of that requirement; SV_MEDIA_STORE=s3 is the
+  # alternative shape and is covered by tests/test_media_store.py rather than by this stack.
+  volumes:
+    - sv-scale-data:/app/data
+
+x-env: &env
+  SV_ENVIRONMENT: production
+  # The scale image is the only thing that carries psycopg; see docker/Dockerfile.postgres.
+  SV_DATABASE_URL: postgresql+psycopg://sv:${SV_SCALE_PG_PASSWORD:-sv-scale-pw}@postgres:5432/synthverify
+  SV_JOB_BROKER: ${SV_SCALE_BROKER:-postgres}
+  SV_WORKER_COUNT: "2"
+  SV_BROKER_POLL_SECONDS: "0.2"
+  SV_BOOTSTRAP_ADMIN_KEY: ${SV_SCALE_ADMIN_KEY:?set SV_SCALE_ADMIN_KEY to the bootstrap admin key}
+  SV_STORAGE_DIR: /app/data/media
+  SV_ARTIFACTS_DIR: /app/data/artifacts
+  # 120 rpm is the shipped default and would turn this run into a rate-limit test. The limiter is
+  # under test in REQ-INFRA-3 / T38; here it is deliberately not the thing being measured.
+  SV_RATE_LIMIT_RPM: "20000"
+  SV_RATE_LIMIT_BURST: "20000"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: sv
+      POSTGRES_PASSWORD: ${SV_SCALE_PG_PASSWORD:-sv-scale-pw}
+      POSTGRES_DB: synthverify
+    ports:
+      - "127.0.0.1:${SV_SCALE_PG_PORT:-5433}:5432"
+    volumes:
+      - sv-scale-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sv -d synthverify"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  # One-shot: `upgrade head`, currently revision 0004 - the lease columns `0003` added plus the two
+  # indexed `trace_id` columns `0004` adds. A PostgresBroker refuses to start without the first, and an
+  # ingest would fail to record the correlation `AC-INFRA-6` promises without the second, so if this
+  # service fails the replicas never do.
+  migrate:
+    <<: *app
+    command: ["python", "-m", "synthverify.cli", "db-upgrade"]
+    environment: *env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: "no"
+
+  api1:
+    <<: *app
+    hostname: api1
+    environment:
+      <<: *env
+      SV_EMBEDDED_WORKER: ${SV_SCALE_EMBEDDED_WORKER:-false}
+    ports:
+      - "127.0.0.1:${SV_SCALE_API1_PORT:-8091}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck: &api-health
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 2s
+      timeout: 3s
+      start_period: 5s
+      retries: 60
+
+  api2:
+    <<: *app
+    hostname: api2
+    environment:
+      <<: *env
+      SV_EMBEDDED_WORKER: ${SV_SCALE_EMBEDDED_WORKER:-false}
+    ports:
+      - "127.0.0.1:${SV_SCALE_API2_PORT:-8092}:8080"
+    depends_on:
+      api1:
+        condition: service_healthy
+    healthcheck: *api-health
+
+  # The consumer tier: the same image, the same database, no HTTP listener at all
+  # (`synthverify worker`), and `SV_EMBEDDED_WORKER=true` because here the fleet *is* the service.
+  # Scale on queue depth (`/readyz`'s `queue_depth`), not on request rate.
+  worker1:
+    <<: *app
+    hostname: worker1
+    command: ["python", "-m", "synthverify.cli", "worker"]
+    environment:
+      <<: *env
+      SV_EMBEDDED_WORKER: "true"
+    depends_on:
+      api1:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
+  worker2:
+    <<: *app
+    hostname: worker2
+    command: ["python", "-m", "synthverify.cli", "worker"]
+    environment:
+      <<: *env
+      SV_EMBEDDED_WORKER: "true"
+    depends_on:
+      api1:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
+volumes:
+  sv-scale-data:
+  sv-scale-pg:

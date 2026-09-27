@@ -1,0 +1,73 @@
+# SynthVerify dependency lock - every package this project can pull in, pinned.
+#
+# Consumed as a *constraints* file, so one lock serves every install profile:
+#   docker/Dockerfile          pip install -c docker/requirements-lock.txt ".[vision]"
+#   make setup / CI            pip install -c docker/requirements-lock.txt -e ".[vision,dev,valkey]"
+# An entry that the requested extra does not need is inert; one it does need is a fact.
+#
+# Generated and verified by:  ./.venv/bin/python -m synthverify.cli dependency-lock [--write]
+# That check walks the declared closure offline (the same metadata FC-1 grades), so generate it
+# from an environment pip resolved from this file, not one edited by hand: a hand-edited env
+# copies its own inconsistencies straight into the pins.
+#
+# Not pinned here, and named so nobody mistakes the silence for coverage: this project itself,
+# and - inside the image only - `pip`, `setuptools` and `wheel`, which come from the base image
+# tag rather than from a requirement. `psycopg` is installed by docker/Dockerfile.postgres from
+# its own pin at deploy time (FC-1 does not grade it: it is a deployment overlay, not a declared
+# dependency). `-c` also does not reach a PEP 517 *isolated build environment*, so the backend
+# that builds this wheel is resolved by pip; the setuptools/wheel pins below govern the
+# environment that runs the gates, where FC-1 can read their licences.
+#
+# One pin is here for the image and not for the machine that wrote this file: `greenlet`, which
+# SQLAlchemy requires only on the linux platforms in its `platform_machine` marker. A host on
+# darwin arm64 cannot discover it by walking installed metadata, so it is declared in
+# dependency_lock.TARGET_PLATFORM_PINS with its reason - and scripts/lock_e2e.py checks it
+# against the built image, which is where the fact lives.
+alembic==1.20.0
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.14.2
+ast-serialize==0.11.2
+certifi==2026.7.22
+click==8.4.2
+fastapi==0.141.1
+greenlet==3.5.6
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+idna==3.18
+iniconfig==2.3.0
+librt==0.15.0
+mako==1.4.3
+markupsafe==3.0.3
+mypy==2.3.1
+mypy-extensions==1.1.0
+numpy==2.4.6
+opencv-python==4.14.0.94
+packaging==26.3
+pathspec==1.1.1
+pillow==12.3.0
+pluggy==1.6.0
+pydantic==2.13.4
+pydantic-core==2.46.4
+pydantic-settings==2.15.0
+pygments==2.20.0
+pytest==9.1.1
+pytest-asyncio==1.4.0
+python-dotenv==1.2.3
+python-multipart==0.0.32
+pyyaml==6.0.3
+ruff==0.16.8
+scipy==1.17.1
+setuptools==82.0.1
+sqlalchemy==2.0.54
+starlette==0.52.1
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+uvicorn==0.52.1
+uvloop==0.22.1
+valkey==6.1.1
+watchfiles==1.3.0
+websockets==17.1
+wheel==0.48.0

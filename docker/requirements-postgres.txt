@@ -1,0 +1,13 @@
+# The PostgreSQL driver this deployment actually uses, installed at *deploy* time.
+#
+# It is deliberately absent from `pyproject.toml`. FC-1 scans declared dependencies, and psycopg 3
+# is LGPL-3.0 - `docs/goal-spec.md` §6.1 note 4 settles this exact case: "production Postgres stays
+# on psycopg", and the BSD test driver (`pg8000`) is verification-only and "never a product
+# dependency". Putting psycopg in an extra would have done the opposite of what the note forbids:
+# normalising "we tolerate copyleft for convenience" inside the gate. So the licence position is
+# stated where it is used instead: this is a dynamically linked, unmodified driver, imported through
+# SQLAlchemy's `postgresql+psycopg` dialect, and the operator chooses to install it by building
+# `docker/Dockerfile.postgres`.
+#
+# Pinned because this file decides what a scale stack contains; `make scale` builds from it.
+psycopg[binary]==3.3.6

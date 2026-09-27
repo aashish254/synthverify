@@ -1,0 +1,46 @@
+{
+  "schema_version": "synthverify.model-manifest/v1",
+  "id": "example-image-deepfake",
+  "name": "Example CNN deepfake classifier (template - not a real model)",
+  "detector": "image_deepfake",
+  "media_type": "image",
+  "license": "Apache-2.0",
+  "allows_commercial_use": true,
+  "weights_source": "https://example.org/releases/example-image-deepfake-1.0.onnx",
+  "weights_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "weights_file": "weights/example-image-deepfake-1.0.onnx",
+  "dataset": "example-forgery-corpus",
+  "dataset_source": "https://example.org/datasets/example-forgery-corpus/LICENSE.txt",
+  "dataset_license": "CC0-1.0",
+  "recipe": "train/example_image_deepfake.md",
+  "model_card": "example-image-deepfake.md",
+  "runtime": {
+    "engine": "onnxruntime",
+    "device": "cpu"
+  },
+  "eval_report": {
+    "held_out_set": "example-forgery-corpus/split-2026-06",
+    "auc": 0.941,
+    "eer": 0.072,
+    "ece": 0.028,
+    "per_group": [
+      { "group": "skin-tone-group-A", "auc": 0.938, "fnr": 0.081 },
+      { "group": "skin-tone-group-B", "auc": 0.935, "fnr": 0.089 },
+      { "group": "age-band-18-30", "auc": 0.944, "fnr": 0.07 },
+      { "group": "age-band-60plus", "auc": 0.921, "fnr": 0.117 }
+    ]
+  },
+  "gates": {
+    "auc": 0.9,
+    "eer": 0.1,
+    "ece": 0.05
+  },
+  "_notes": [
+    "Rename to <id>.json to activate it; *.example files are never scanned.",
+    "CC-BY-4.0 is deliberately refused for weights and corpora: it is not on the FC-1 allowlist, and its",
+    "attribution/share-alike obligations do not compose with a closed-weight enterprise deployment.",
+    "CC0-1.0 and CDLA-Permissive-2.0 are the dataset licences FC-3 accepts; everything else on the",
+    "allowlist is a software licence. Use this template as a shape, not as a licence answer -",
+    "see docs/goal-spec.md FC-3 and OUT-4."
+  ]
+}

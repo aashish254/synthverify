@@ -1,0 +1,20 @@
+# Line endings. Every gate runs through the Makefile, and a CRLF Makefile stops parsing - so the
+# repository stores LF and a Windows checkout gets LF too, rather than whatever `core.autocrlf`
+# the cloning machine happened to have set.
+* text=auto eol=lf
+
+# Checked out byte-for-byte; a translated copy is wrong rather than merely ugly.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.wav binary
+*.ico binary
+*.pdf binary
+
+# Written by `synthverify dependency-lock --write`. Still diffable on purpose - a pin change is the
+# reviewable event - but a human must not hand-edit it, so GitHub folds it by default.
+docker/requirements-lock.txt linguist-generated
+
+# Documentation, so the language bar reports the code rather than the prose.
+*.md linguist=documentation
+docs/** linguist=documentation

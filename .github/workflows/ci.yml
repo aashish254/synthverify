@@ -1,0 +1,671 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # AC-INFRA-1, first clause: the *whole* suite runs against Postgres, not a
+    # Postgres-shaped subset. Two legs over one command, so a pass means the two
+    # dialects agreed on every one of the tests rather than on whatever
+    # happened to be marked as database-sensitive.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+        dialect: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sv
+          POSTGRES_PASSWORD: sv
+          POSTGRES_DB: sv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sv -d sv_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      valkey:
+        # The shared rate-limit bucket (REQ-INFRA-3). Valkey, not Redis: BSD-3 vs RSALv2/SSPL, FC-1.
+        image: valkey/valkey:8
+        ports:
+          - 6379:6379
+    env:
+      SV_EMBEDDED_WORKER: "true"
+      # Empty on the sqlite leg, which is exactly the switch tests/conftest.py reads.
+      SV_TEST_POSTGRES_URL: ${{ matrix.dialect == 'postgres' && 'postgresql+pg8000://sv:sv@localhost:5432/sv_test' || '' }}
+      # Set on both legs: the shared-limiter cases are dialect-independent.
+      SV_TEST_VALKEY: "localhost:6379"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install package
+        # `-c docker/requirements-lock.txt`: CI installs the same version set the shipped image
+        # installs, so a green suite is evidence about the artifact rather than about whatever
+        # PyPI considered newest today. The lock is a constraints file, so entries this profile
+        # does not pull in are inert rather than an error.
+        run: |
+          pip install -c docker/requirements-lock.txt -e ".[vision,dev,valkey]"
+          # pg8000 (BSD-3) rather than psycopg2 (LGPL): CI-only verification driver,
+          # and a pure-Python one cannot fail to build. See FC-1 in docs/goal-spec.md.
+          # Not in the lock, because nothing the product declares pulls it in.
+          pip install "pg8000>=1.21.5"
+      - name: Lint
+        if: matrix.dialect == 'sqlite'
+        run: ruff check synthverify tests scripts
+      - name: The shared limiter has somewhere to live
+        # Without this, an absent valkey service would turn five real tests into five quiet
+        # skips on both legs, and AC-INFRA-3 would be reported as covered by a suite that
+        # never touched a shared bucket.
+        run: |
+          python - <<'PY'
+          import os
+          import socket
+
+          host, _, port = os.environ["SV_TEST_VALKEY"].partition(":")
+          with socket.create_connection((host, int(port or 6379)), timeout=3) as s:
+              s.sendall(b"PING\r\n")
+              answer = s.recv(32)
+          assert answer.startswith(b"+PONG"), answer
+          print("valkey at", os.environ["SV_TEST_VALKEY"], "answered", answer.decode().strip())
+          PY
+      - name: The Postgres leg may not silently degrade to SQLite
+        if: matrix.dialect == 'postgres'
+        # Without this, a missing service or a typo'd URL would drop the leg back
+        # to SQLite and the matrix would still report two greens.
+        run: |
+          python - <<'PY'
+          import os
+          import sqlalchemy as sa
+
+          url = sa.make_url(os.environ["SV_TEST_POSTGRES_URL"]).set(database="postgres")
+          with sa.create_engine(url.render_as_string(hide_password=False), isolation_level="AUTOCOMMIT").connect() as conn:
+              print("server:", conn.execute(sa.text("select version()")).scalar())
+          PY
+      - name: Run test suite
+        # -q -rs: a skip is printed with its reason instead of hiding in a dot line.
+        run: pytest tests/ -q -rs --tb=short
+      - name: Every fixture database was dropped
+        if: matrix.dialect == 'postgres'
+        # Proves the per-test databases were real *and* cleaned up: the seam names
+        # them svtest_*, so residue means a teardown path rotted. It does not prove
+        # the leg used Postgres - the step above and the zero-skip count do that.
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import sqlalchemy as sa
+
+          url = sa.make_url(os.environ["SV_TEST_POSTGRES_URL"]).set(database="postgres")
+          with sa.create_engine(url.render_as_string(hide_password=False), isolation_level="AUTOCOMMIT").connect() as conn:
+              left = conn.execute(sa.text("select count(*) from pg_database where datname like 'svtest%'")).scalar()
+          print("fixture databases left behind:", left)
+          sys.exit(1 if left else 0)
+          PY
+
+  portability:
+    # A stranger installs this on a laptop, not on ubuntu-22. Six environments no other job
+    # covers: macOS and Windows, crossed with every interpreter the metadata claims to support -
+    # 3.11, which every measured number in this repository came from, plus 3.12 and 3.13, which
+    # `tests/test_release_hygiene.py` requires this matrix to match `[project] classifiers`
+    # against. The Postgres and Valkey services are deliberately absent
+    # - what this job proves is that the *default* configuration installs from the lock and passes
+    # anywhere, which is exactly the path a first-time user takes.
+    #
+    # Windows is the honest gap: `docs/INSTALL.md` carries the PowerShell commands this job runs,
+    # and until a windows-latest run goes green that section is intent rather than evidence.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install, from the lock, every declared root
+        # The body of `make setup`, spelled out because Windows has no make. Installing a subset is
+        # what once made a clean clone fail its own suite: FC-1 and the lock check grade declared
+        # roots and fail closed on one they cannot read. tests/test_release_hygiene.py pins that
+        # this set, `make setup` and `pyproject.toml` stay the same three extras.
+        run: python -m pip install -c docker/requirements-lock.txt -e ".[vision,valkey,dev]"
+      - name: The environment doctor must approve this environment
+        # If `make doctor` is wrong anywhere, it is wrong for the reader who needs it most.
+        run: python scripts/doctor.py
+      - name: Run test suite
+        run: python -m pytest tests -q -rs --tb=short --junitxml=result.xml
+      - name: Every skip here must be a service skip
+        # 21 is the Postgres- and Valkey-gated population, and nothing else. A 22nd skip means a
+        # test decided to sit this platform out rather than fail on it, which is how a port breaks
+        # quietly while the job still reports green.
+        run: |
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          suite = ET.parse("result.xml").getroot()
+          suite = suite if suite.tag == "testsuite" else suite.find("testsuite")
+          tests, failures, errors = (int(suite.get(k) or 0) for k in ("tests", "failures", "errors"))
+          skipped = int(suite.get("skipped") or 0)
+          print(f"{tests} tests, {failures} failures, {errors} errors, {skipped} skipped")
+          if failures or errors:
+              sys.exit("the suite failed on this platform")
+          if skipped:
+              reasons = sorted({(node.get("message") or "").split(":")[0] for node in ET.parse("result.xml").iter("skipped")})
+              print("skip reasons:", reasons)
+          if skipped > 21:
+              sys.exit(f"{skipped} skips on a job that expects at most 21 service skips")
+          PY
+
+
+  freedom:
+    # FC-1 / FC-3 / FC-4: the three constraints that decide whether this product
+    # is *allowed* to ship. Each step exits non-zero on a violation, so a
+    # non-permissive dependency, an unlicensed model or a phone-home breaks the
+    # build rather than surfacing in a customer deployment.
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install package
+        # Every declared extra, because FC-1 grades every declared root: a root that is not
+        # installed cannot be graded, and "cannot be graded" is a violation, not a pass. The
+        # constraint file is the same one the image installs from, so this job grades the
+        # version set that actually ships.
+        run: pip install -c docker/requirements-lock.txt -e ".[vision,dev,valkey]"
+      - name: FC-1 - dependency licence gate (permissive-only, fails closed)
+        run: synthverify licenses
+      - name: T39 - the lock pins exactly the declared closure
+        # Both directions: an unpinned closure member (a dependency added without regenerating
+        # the lock) and a pin nothing depends on any more. `synthverify freedom` chains this too;
+        # it is a named step because a red CI should say which gate moved.
+        run: synthverify dependency-lock
+      - name: FC-3 - model-manifest gate (open weights, open data, per-group eval)
+        run: synthverify model-manifests
+      - name: Combined freedom report
+        run: synthverify freedom --json > freedom-report.json
+      - name: FC-4 - offline proof (outbound sockets blocked at the syscall boundary)
+        run: pytest tests/test_offline.py -m offline -q --tb=short
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: freedom-report
+          path: freedom-report.json
+          if-no-files-found: ignore
+
+  migrations:
+    # The half of AC-INFRA-1 that a test suite cannot assert: the *shipped product*
+    # boots on Postgres, and the *deploy path* works from a bare install. Schema
+    # equality itself ("upgrade head == create_all") now runs inside both legs of
+    # the test matrix above, so this job no longer repeats it - and it deliberately
+    # installs without the vision extras, which is also a check that schema work
+    # never drags in heavy dependencies (AC-FC-6).
+    runs-on: ubuntu-latest
+    needs: test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sv
+          POSTGRES_PASSWORD: sv
+          POSTGRES_DB: sv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sv -d sv_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install package
+        run: |
+          pip install -c docker/requirements-lock.txt -e ".[dev]"
+          pip install "pg8000>=1.21.5"
+      - name: AC-INFRA-1 - the product itself on Postgres
+        # Schema equality is not "does the app run": this boots uvicorn against a
+        # throwaway database on the same server and drives auth, ingestion, cross-org
+        # dedupe, per-org policy routing, artifacts and the audit chain over HTTP.
+        run: python scripts/postgres_e2e.py --port 8099
+        env:
+          SV_TEST_POSTGRES_URL: "postgresql+pg8000://sv:sv@localhost:5432/sv_test"
+      - name: The deploy entry point works without alembic.ini in the way
+        run: |
+          synthverify db-upgrade --url "sqlite:////tmp/deploy.db" --print-sql | grep -q "CREATE TABLE jobs"
+          synthverify db-upgrade --url "sqlite:////tmp/deploy.db"
+          synthverify db-upgrade --url "sqlite:////tmp/deploy.db"
+
+  scale:
+    # AC-INFRA-2, second clause. It runs against *images*, because the product's
+    # Postgres driver is an overlay on the shipped image: the base image has no
+    # driver at all (proven inside the run), so a green here can only come from
+    # the deployment shape an operator actually starts. Three runs, not one:
+    # the real stack must pass, and the two ways it could be faked - no consumer
+    # tier, or a private in-process queue - must each fail. A green that nothing
+    # can turn red is a report, not a gate.
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: "Install the verifier's own deps (host side: PIL fixture generator, httpx, pg8000)"
+        run: |
+          pip install -c docker/requirements-lock.txt -e ".[vision,dev]"
+          # BSD-3, CI-only. The containers get psycopg from docker/Dockerfile.postgres.
+          pip install "pg8000>=1.21.5"
+      - name: Build both images
+        run: |
+          docker build -f docker/Dockerfile -t synthverify:ci .
+          docker build -f docker/Dockerfile.postgres --build-arg BASE=synthverify:ci -t synthverify:scale .
+      - name: AC-INFRA-2 - 200 jobs, two replicas, every job exactly once
+        run: python scripts/scale_e2e.py --no-build
+      - name: Mutation - no consumer tier must not drain the durable queue
+        run: python scripts/scale_e2e.py --no-build --without-workers --deadline 60 --expect-fail
+      - name: Mutation - an in-process queue must not record shared ownership
+        run: python scripts/scale_e2e.py --no-build --embedded --deadline 60 --expect-fail
+      - name: No container from this job survived
+        if: always()
+        # `down -v` lives in the script's `finally`; this catches a teardown that
+        # rotted, since a leaked `sv-scale-*` stack holds ports and volumes that
+        # the next job would then trip over.
+        run: |
+          left=$(docker ps -a --format '{{.Names}}' | grep '^sv-scale-' || true)
+          echo "leftovers: ${left:-none}"
+          test -z "$left"
+
+  limiter:
+    # AC-INFRA-3, the half a test suite cannot reach: the budget has to be global across
+    # *processes*. Four runs, not one - the shared bucket must measurably cost less than two
+    # private ones, and each way that could be faked (a private bucket, no fallback, no socket
+    # timeout) has to be caught. Same shape as the scale job; no compose file, because the
+    # script starts its own Valkey and stops it.
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: "Install the verifier's own deps (host side: the app it boots, and the Valkey client)"
+        # No vision extra: this gate never analyses media. It is also a check that the limiter
+        # path stays inside the core dependency set - and that a *subset* install works against a
+        # lock describing the whole closure, which is what `-c` rather than `-r` buys.
+        run: pip install -c docker/requirements-lock.txt -e ".[dev,valkey]"
+      - name: AC-INFRA-3 - two processes, one budget, then a stopped and a silent backend
+        run: python scripts/ratelimit_e2e.py
+      - name: Mutation - a private bucket must not be reported as a global budget
+        run: python scripts/ratelimit_e2e.py --mutate isolated --expect-fail
+      - name: Mutation - a limiter with no degradation must break the request path
+        run: python scripts/ratelimit_e2e.py --mutate nofallback --expect-fail
+      - name: Mutation - a limiter with no socket timeout must hang the check
+        run: python scripts/ratelimit_e2e.py --mutate no-timeout --expect-fail
+      - name: No container from this job survived
+        if: always()
+        # `docker rm -f` is in the script's `finally`; this catches a teardown that rotted,
+        # since a leaked Valkey holds a published port the next job would trip over.
+        run: |
+          left=$(docker ps -a --format '{{.Names}}' | grep '^sv-rl-' || true)
+          echo "leftovers: ${left:-none}"
+          test -z "$left"
+
+  tenancy:
+    # AC-IDAM-3, the half a green table cannot prove: those 404s have to come from enforcement,
+    # not from a fixture that happens not to contain the row. Seven runs - the matrix on an
+    # unmutated build, then once per way isolation can be faked (a role that bypasses tenancy, a
+    # 403 that leaks existence, content dedup shared across orgs, a global idempotency key, a
+    # role-only control plane, a per-subject metric label). Each mutation has to be *caught*.
+    # No service and no container: the matrix's own fixtures create and drop their databases.
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: "Install the gate's deps (host side: the pipeline the matrix really runs jobs through)"
+        run: pip install -c docker/requirements-lock.txt -e ".[vision,dev]"
+      - name: AC-IDAM-3 - the matrix on an unmutated build
+        run: python scripts/tenancy_e2e.py
+      - name: Mutation - a tenant's admin key must not read another tenant's job
+        run: python scripts/tenancy_e2e.py --mutate admin-bypass --expect-fail
+      - name: Mutation - a foreign row must not answer 403 and leak its existence
+        run: python scripts/tenancy_e2e.py --mutate existence-oracle --expect-fail
+      - name: Mutation - identical bytes in two orgs must not share an asset row
+        run: python scripts/tenancy_e2e.py --mutate shared-dedup --expect-fail
+      - name: Mutation - an idempotency key must not be a handle into another org
+        run: python scripts/tenancy_e2e.py --mutate idempotency-global --expect-fail
+      - name: Mutation - the control plane must not fall back to role-only
+        run: python scripts/tenancy_e2e.py --mutate control-plane-open --expect-fail
+      - name: Mutation - /metrics must not publish who got limited
+        run: python scripts/tenancy_e2e.py --mutate subject-label --expect-fail
+      - name: No mutated package or junit survived
+        if: always()
+        # The scratch copy of the package is the evidence this gate leaves; if teardown rotted, a
+        # stale `synthverify/` on the runner is exactly the thing a later job could import by
+        # accident and read as a result.
+        run: |
+          left=$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'sv-tenancy-*' 2>/dev/null || true)
+          echo "leftovers: ${left:-none}"
+          test -z "$left"
+
+  retention:
+    # AC-INFRA-5, the half a green sweep suite cannot prove: "the hold blocked it" and "the object
+    # survived" are assertions about code that could simply stop mattering. Twelve runs - the suite on
+    # an unmutated build, then once per way the sweep can be faked (a pin never consulted, a job pin
+    # that matches nothing, shared bytes deleted per row, shared heatmaps deleted per row, a preview
+    # that deletes, a TTL stored but never read, a ledger row with no decision in it, an in-flight
+    # job's asset deleted under the worker, a scheduler that dies on one bad pass, one whose failures
+    # never reach the scrape, one that ignores the spacing between passes). Each mutation has to be
+    # *caught*.
+    # No service and no container: the suite's fixtures create and drop their own databases.
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: "Install the gate's deps (host side: the pipeline the sweep really deletes artifacts from)"
+        run: pip install -c docker/requirements-lock.txt -e ".[vision,dev]"
+      - name: AC-INFRA-5 - the mutation patches still quote live source
+        run: python scripts/retention_e2e.py --check-anchors
+      - name: AC-INFRA-5 - the sweep suite on an unmutated build
+        run: python scripts/retention_e2e.py
+      - name: Mutation - a legal hold must actually block the deletion it names
+        run: python scripts/retention_e2e.py --mutate no-hold --expect-fail --skip-baseline
+      - name: Mutation - pinning a verdict must protect that verdict's asset
+        run: python scripts/retention_e2e.py --mutate job-pin-ignored --expect-fail --skip-baseline
+      - name: Mutation - bytes shared by two tenants must outlive one tenant's TTL
+        run: python scripts/retention_e2e.py --mutate shared-object --expect-fail --skip-baseline
+      - name: Mutation - heatmaps named by digest must not go with the expired tenant's row
+        run: python scripts/retention_e2e.py --mutate shared-artifact --expect-fail --skip-baseline
+      - name: Mutation - a dry run must not touch a single byte
+        run: python scripts/retention_e2e.py --mutate dry-run-applies --expect-fail --skip-baseline
+      - name: Mutation - a configured TTL must be the thing the sweep reads
+        run: python scripts/retention_e2e.py --mutate ttl-never-reads --expect-fail --skip-baseline
+      - name: Mutation - the ledger record must say what the pass decided
+        run: python scripts/retention_e2e.py --mutate audit-no-detail --expect-fail --skip-baseline
+      - name: Mutation - queued or running work must defer the asset, not lose it
+        run: python scripts/retention_e2e.py --mutate inflight-undeferred --expect-fail --skip-baseline
+      - name: Mutation - one failed pass must not end retention enforcement
+        run: python scripts/retention_e2e.py --mutate scheduler-dies --expect-fail --skip-baseline
+      - name: Mutation - a failed pass must be counted where an alert can read it
+        run: python scripts/retention_e2e.py --mutate scheduler-uncounted --expect-fail --skip-baseline
+      - name: Mutation - the sweep loop must keep the spacing it was configured with
+        run: python scripts/retention_e2e.py --mutate scheduler-interval --expect-fail --skip-baseline
+      - name: Mutation - a bucket that refuses the delete must not read as a successful sweep
+        run: python scripts/retention_e2e.py --mutate storage-swallows --expect-fail --skip-baseline
+      - name: Mutation - a committed pass counts as a sweep even when its bytes failed
+        run: python scripts/retention_e2e.py --mutate sweep-counted-late --expect-fail --skip-baseline
+      - name: No mutated package or junit survived
+        if: always()
+        # The scratch copy of the package is the evidence this gate leaves; if teardown rotted, a
+        # stale `synthverify/` on the runner is exactly the thing a later job could import by
+        # accident and read as a result.
+        run: |
+          left=$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'sv-retention-*' 2>/dev/null || true)
+          echo "leftovers: ${left:-none}"
+          test -z "$left"
+
+  ledger:
+    # AC-IDAM-4, both halves. The first is a measurement rather than an assertion: 1 M chained audit
+    # events verified single-threaded, printed with its seconds and its peak RSS, on the same
+    # PostgreSQL the suite runs against, and compared against the shape v1 shipped (every row
+    # materialised as an ORM object) so the memory claim stays a measurement too. The script fails the
+    # job if the verify took 60 s or more, if it hashed fewer rows than the ledger holds, or if any of
+    # its four tampering probes stopped being detected - including the one probe whose expected result
+    # is *not* detected, which is the documented boundary and must fail the moment it stops being the
+    # boundary.
+    #
+    # The second half is the teeth gate: eleven runs of `tests/test_audit_checkpoints.py`, the suite on
+    # an unmutated build and then once per way the checkpoint scheme can be faked (nothing sealed, a
+    # seal one row off, the sealed head not compared, the seal chain not followed, the seal's own
+    # digest not recomputed, its range count not checked, a seal past the end ignored, a backfill that
+    # seals before it verifies, no server-side cursor, a digest that ignores the payload, a digest that
+    # ignores the pointer). Each mutation has to be *caught*.
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sv
+          POSTGRES_PASSWORD: sv
+          POSTGRES_DB: sv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sv -d sv_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      SV_TEST_POSTGRES_URL: "postgresql+pg8000://sv:sv@localhost:5432/sv_test"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: "Install the gate's deps (host side: the driver that verifies a million rows is the product's own)"
+        run: pip install -c docker/requirements-lock.txt -e ".[vision,dev]"
+      - name: AC-IDAM-4 - the mutation patches still quote live source
+        run: python scripts/ledger_e2e.py --check-anchors
+      - name: AC-IDAM-4 - the checkpoint suite on an unmutated build
+        run: python scripts/ledger_e2e.py
+      - name: Mutation - nothing may stop being sealed on the append path
+        run: python scripts/ledger_e2e.py --mutate no-seal-on-append --expect-fail --skip-baseline
+      - name: Mutation - a seal must name its own row's hash, not its predecessor's
+        run: python scripts/ledger_e2e.py --mutate wrong-seal-head --expect-fail --skip-baseline
+      - name: Mutation - the sealed head must be compared against the chain
+        run: python scripts/ledger_e2e.py --mutate seal-head-unchecked --expect-fail --skip-baseline
+      - name: Mutation - a pruned seal must be reported as a pruned seal
+        run: python scripts/ledger_e2e.py --mutate seal-chain-unchecked --expect-fail --skip-baseline
+      - name: Mutation - a seal's columns must be covered by its own digest
+        run: python scripts/ledger_e2e.py --mutate seal-hash-unchecked --expect-fail --skip-baseline
+      - name: Mutation - the recorded range size must be checked against the walk
+        run: python scripts/ledger_e2e.py --mutate range-count-unchecked --expect-fail --skip-baseline
+      - name: Mutation - a seal the chain no longer reaches must fail the report
+        run: python scripts/ledger_e2e.py --mutate tail-seal-unchecked --expect-fail --skip-baseline
+      - name: Mutation - backfill must verify before it seals
+        run: python scripts/ledger_e2e.py --mutate backfill-without-verifying --expect-fail --skip-baseline
+      - name: Mutation - the scale read must page server-side
+        run: python scripts/ledger_e2e.py --mutate no-stream-cursor --expect-fail --skip-baseline
+      - name: Mutation - the digest must commit to the payload
+        run: python scripts/ledger_e2e.py --mutate digest-ignores-detail --expect-fail --skip-baseline
+      - name: Mutation - the digest must commit to the chain pointer
+        run: python scripts/ledger_e2e.py --mutate digest-ignores-prev --expect-fail --skip-baseline
+      - name: AC-IDAM-4 - 1 M events verified, both read shapes, four probes (a private database, dropped)
+        run: python scripts/ledger_bench.py --postgres --events 1000000 --every 5000
+      - name: No mutated package, scratch database or junit survived
+        if: always()
+        # The scratch copy of the package is the evidence this gate leaves; a stale `synthverify/` on
+        # the runner is exactly what a later job could import by accident and read as a result. The
+        # benchmark's private database shares the suite's `svtest_` prefix, so one query covers both.
+        run: |
+          left=$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'sv-ledger-*' 2>/dev/null || true)
+          echo "scratch dirs left: ${left:-none}"
+          test -z "$left"
+          python - <<'PY'
+          import os
+          import sys
+          import sqlalchemy as sa
+
+          url = sa.make_url(os.environ["SV_TEST_POSTGRES_URL"]).set(database="postgres")
+          with sa.create_engine(url.render_as_string(hide_password=False), isolation_level="AUTOCOMMIT").connect() as conn:
+              databases = conn.execute(
+                  sa.text("select count(*) from pg_database where datname like 'svtest%'")
+              ).scalar()
+          print("svtest_* databases left behind:", databases)
+          sys.exit(1 if databases else 0)
+          PY
+
+  tracing:
+    # AC-INFRA-6, the half an in-process suite cannot reach: the trace id has to survive a hop
+    # between two OS processes. This boots the worker-only command `docker/compose-scale.yml` runs
+    # against the same Postgres service, then reads the one id back out of a live OpenMetrics
+    # exemplar, three ledger rows over the admin API, that process's captured log file, and the
+    # metric names the shipped alert rules reference. Four further runs break each way the claim
+    # could be faked - a renderer without exemplars, a parser that trusts the caller's header, a
+    # metric renamed under the rules file, a stored id edited after the fact - so the first green
+    # is a gate rather than a report.
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sv
+          POSTGRES_PASSWORD: sv
+          POSTGRES_DB: sv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sv -d sv_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: "Install the gate's deps (host side: the two product processes it boots)"
+        # Vision extra because the run ingests a real JPEG and waits for a verdict; the strict
+        # OpenMetrics reader it scrapes with lives in tests/, which is on the path already.
+        run: |
+          pip install -c docker/requirements-lock.txt -e ".[vision,dev]"
+          pip install "pg8000>=1.21.5"
+      - name: AC-INFRA-6 - one trace id, read back from exemplar, ledger, log line and rules
+        run: python scripts/trace_e2e.py --url "postgresql+pg8000://sv:sv@localhost:5432/sv_test"
+      - name: Mutation - an exposition with no exemplars must fail the trace claim
+        run: python scripts/trace_e2e.py --url "postgresql+pg8000://sv:sv@localhost:5432/sv_test" --mutate no-exemplar --expect-fail
+      - name: Mutation - a parser that trusts the caller's header must fail the hostile-header check
+        run: python scripts/trace_e2e.py --url "postgresql+pg8000://sv:sv@localhost:5432/sv_test" --mutate lenient-parser --expect-fail
+      - name: Mutation - a renamed metric must fail the rules-versus-scrape cross-check
+        run: python scripts/trace_e2e.py --url "postgresql+pg8000://sv:sv@localhost:5432/sv_test" --mutate renamed-metric --expect-fail
+      - name: Mutation - an edited trace id must break the audit hash chain
+        run: python scripts/trace_e2e.py --url "postgresql+pg8000://sv:sv@localhost:5432/sv_test" --mutate tampered-trace --expect-fail
+      - name: Every database this gate created was dropped
+        if: always()
+        run: |
+          python - <<'PY'
+          import sqlalchemy as sa
+
+          url = sa.make_url("postgresql+pg8000://sv:sv@localhost:5432/sv_test").set(database="postgres")
+          with sa.create_engine(url.render_as_string(hide_password=False), isolation_level="AUTOCOMMIT").connect() as conn:
+              left = conn.execute(sa.text("select count(*) from pg_database where datname like 'svtest%'")).scalar()
+          print("gate databases left behind:", left)
+          assert not left
+          PY
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -f docker/Dockerfile -t synthverify:ci .
+      - name: Smoke test container
+        run: |
+          docker run -d --name sv -p 8080:8080 \
+            -e SV_BOOTSTRAP_ADMIN_KEY=sv_live_ci_smoke_key_0000000000000000 \
+            synthverify:ci
+          for i in $(seq 1 20); do
+            curl -fsS http://localhost:8080/healthz && break || sleep 2
+          done
+          curl -fsS http://localhost:8080/readyz
+      - name: AC-FC-4 - verify a real file with no network at all
+        # Same script `make airgap` runs locally, so the CI proof and the documented
+        # local proof cannot drift apart. --network none removes every interface: no
+        # DNS, no egress. It runs after "Build image" because a sealed container
+        # cannot pull - if analysis still completes, the product needs nothing.
+        run: bash scripts/airgap.sh synthverify:ci
+
+  reproducible-image:
+    # T39, the half no host-side test can assert: "the package set is deterministic" is a claim
+    # about a *build*. `scripts/lock_e2e.py` builds the shipping image twice with the layer cache
+    # switched off - otherwise byte-identical output would only restate the cache key - compares
+    # that freeze with the committed lock under exactly the exclusions the lock header names, and
+    # runs FC-1 *inside* the image, where SQLAlchemy's `platform_machine` marker is true and
+    # `greenlet` is in the closure (a darwin runner never sees it). The four mutation steps are
+    # what stop the three checks above from being a report: exit 0 means the gate noticed.
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install the full declared closure, through the lock
+        # The consistency check compares the lock against *installed* metadata, so it needs every
+        # extra present. Installing them via `-c` is also the check that the file is usable as
+        # constraints for the platform that actually ships - linux, python 3.11 - rather than
+        # only for the machine that generated it.
+        run: pip install -c docker/requirements-lock.txt -e ".[vision,dev,valkey]"
+      - name: The gate is green before anything is broken
+        # Without this, a mutation step that "caught" a mutation the gate would have caught
+        # anyway - because the environment was never valid - still looks like evidence.
+        run: python -m synthverify.cli dependency-lock
+      - name: AC-FC-6 - two cold builds, one freeze, and that freeze is the lock
+        run: python scripts/lock_e2e.py
+      - name: Mutation - a lock whose pin disagrees with the closure
+        run: python scripts/lock_e2e.py --mutate bump-pin --expect-fail
+      - name: Mutation - a dependency nobody locked
+        run: python scripts/lock_e2e.py --mutate new-dep --expect-fail
+      - name: Mutation - a lock the build did not honour
+        run: python scripts/lock_e2e.py --mutate doctored-pin --expect-fail
+      - name: Mutation - no lock at all, which is the pre-T39 world
+        run: python scripts/lock_e2e.py --mutate no-lock --expect-fail
+      - name: No image from this job survived
+        if: always()
+        # `docker rmi` is in the script's `finally`; this catches a teardown that rotted, since a
+        # leaked tag is 1 GB of runner disk the next job pays for.
+        run: |
+          left=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^synthverify:lock-' || true)
+          echo "leftovers: ${left:-none}"
+          test -z "$left"

@@ -1,0 +1,133 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synthverify"
+version = "1.0.0"
+description = "Enterprise Synthetic Media Verification Pipeline - multi-detector forensics orchestration with Explainable AI (XAI) risk flags (SDG 16)"
+readme = "README.md"
+# 3.11, not 3.10: `synthverify/db.py` imports `enum.StrEnum`, which does not exist before 3.11, so
+# a 3.10 install would succeed and then raise ImportError at import time. Measured on
+# `python:3.10-slim` (`ImportError: cannot import name 'StrEnum' from 'enum'`); the floor is pinned
+# against the prose by `tests/test_release_hygiene.py`.
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "SynthVerify Engineering" }]
+keywords = [
+    "deepfake",
+    "forensics",
+    "synthetic-media",
+    "explainable-ai",
+    "xai",
+    "misinformation",
+    "content-provenance",
+    "sdg16",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Other Audience",
+    "Topic :: Security",
+    "Topic :: Multimedia :: Video :: Analysis",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+    "numpy>=1.24",
+    "pillow>=10.0",
+    # The compliance gates read PEP 508 requirement lines out of installed metadata, and a
+    # Requires-Dist line is only in scope if its environment marker selects this interpreter
+    # (`python_version < "3.10"` excludes importlib-metadata on 3.11). Marker semantics are not
+    # something to reimplement: `packaging` is the reference one, Apache-2.0/BSD, and it was
+    # already in the closure via pytest - declaring it is what lets core code import it.
+    "packaging>=23",
+]
+
+# Every `[project]` scalar key above, and only tables from here down: a table header ends the
+# parent's key list, so a `dependencies = [...]` written after `[project.urls]` silently becomes
+# `project.urls.dependencies`, and the closure walk reports `core=0` - which `make lock-check` then
+# answers by calling all 28 of the real pins stale.
+[project.urls]
+Homepage = "https://github.com/aashish254/synthverify"
+Documentation = "https://github.com/aashish254/synthverify/tree/main/docs"
+Repository = "https://github.com/aashish254/synthverify"
+Issues = "https://github.com/aashish254/synthverify/issues"
+Changelog = "https://github.com/aashish254/synthverify/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+# Signal-processing / vision accelerators used when present; the pipeline
+# degrades gracefully (detectors self-report as SKIPPED) without them.
+vision = ["opencv-python>=4.8", "scipy>=1.10"]
+# REQ-INFRA-3: the client for the shared rate-limit bucket. valkey-py is MIT and pure Python, and
+# its one unconditional dependency (async-timeout) is gated to Python < 3.11.3, so this extra adds
+# a single graded package. The server it talks to is Valkey (BSD-3) - never Redis >= 7.4, whose
+# RSALv2/SSPL tri-licence FC-1 forbids. The default install stays client-free without this extra.
+valkey = ["valkey>=6.0,<7"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "mypy>=1.9",
+    # FC-1 covers build-time dependencies ("Every runtime and build-time dependency", goal-spec §4),
+    # and it grades offline, from installed metadata. A PEP 517 isolated build never leaves
+    # `setuptools`/`wheel` in the *target* environment, so declaring them here is what makes the
+    # build toolchain gradable at all: the environment that runs the gate has them installed. This
+    # does not add a dependency the project did not have - `build-system` already required both; it
+    # puts them where an offline scan can read them instead of hoping the interpreter was built by
+    # something that happens to include them.
+    "setuptools>=68",
+    "wheel",
+]
+
+[project.scripts]
+synthverify = "synthverify.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["synthverify*"]
+
+[tool.setuptools.package-data]
+synthverify = [
+    "py.typed",
+    "dashboard/*.html",
+    "dashboard/*.js",
+    "models/*.json",
+    "models/*.md",
+    "models/*.example",
+    "migrations/*.py",
+    "migrations/*.mako",
+    "migrations/versions/*.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "e2e: end-to-end workflow tests",
+    "slow: longer running detector tests",
+    "offline: FC-4 proof that the path runs with outbound sockets blocked",
+]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B"]
+ignore = ["E501", "B008"]
