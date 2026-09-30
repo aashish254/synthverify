@@ -293,7 +293,9 @@ def check_lock(project_root: Path | str = ".", lock_path: Path | str = LOCK_PATH
             LockIssue("stale", f"{pin} is in the lock and nothing declares it{hint}")
         )
     for name, (version, reason) in sorted(TARGET_PLATFORM_PINS.items()):
-        if parse_requirement(name).key not in pins:
+        platform_pin = parse_requirement(name)
+        assert platform_pin is not None  # every TARGET_PLATFORM_PINS key is a literal, valid name
+        if platform_pin.key not in pins:
             issues.append(
                 LockIssue(
                     "unpinned",
@@ -317,7 +319,9 @@ def write_lock(project_root: Path | str = ".", lock_path: Path | str = LOCK_PATH
         )
     pins = {key: Pin(key, version) for key, version in closure.items()}
     for name, (version, _reason) in TARGET_PLATFORM_PINS.items():
-        pins.setdefault(parse_requirement(name).key, Pin(name, version))
+        platform_pin = parse_requirement(name)
+        assert platform_pin is not None  # every TARGET_PLATFORM_PINS key is a literal, valid name
+        pins.setdefault(platform_pin.key, Pin(name, version))
     body = "\n".join(str(pin) for _, pin in sorted(pins.items(), key=lambda kv: kv[1].name.lower()))
     Path(lock_path).write_text(HEADER + body + "\n")
     return check_lock(project_root, lock_path)

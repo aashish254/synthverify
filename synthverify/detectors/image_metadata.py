@@ -10,6 +10,7 @@ signal because most social platforms strip EXIF on upload.
 from __future__ import annotations
 
 import struct
+from typing import Any
 
 from PIL import Image
 
@@ -283,7 +284,7 @@ class ImageMetadataDetector(Detector):
         }
         found = {k: ctx.data.find(v) != -1 for k, v in markers.items()}
         present = any(found.values())
-        evidence = {"c2pa_present": present}
+        evidence: dict[str, Any] = {"c2pa_present": present}
         if present:
             evidence["c2pa_markers"] = {k: v for k, v in found.items() if v}
             flags.append("C2PA_PROVENANCE_PRESENT")
@@ -348,7 +349,7 @@ def estimate_jpeg_quality(table: list[int]) -> int | None:
     best_q, best_err = None, 1e18
     for q in range(1, 101):
         scale = 5000 / q if q < 50 else 200 - 2 * q
-        err = 0
+        err: float = 0
         for base, actual in zip(IJG_LUMA, table, strict=False):
             predicted = max(1, min(255, (base * scale + 50) // 100))
             err += abs(predicted - actual)

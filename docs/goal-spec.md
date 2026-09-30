@@ -179,6 +179,16 @@ existing `DetectionContext` lazy-decode contract, with `weight > 1.0`, and MUST 
 `AC-DET-1` `tests/test_detectors.py` gains per-model tests on the deterministic corpus in
 `tests/fixtures_gen.py`, asserting both discrimination (authentic vs synthetic separation) and that
 every non-empty finding string is backed by a numeric field in `evidence`.
+`AC-DET-1b` **Amendment — the fixture corpus alone is not admissible evidence.** `tests/fixtures_gen.py`
+generates every "synthetic" sample by hand-injecting the exact artefact a detector checks for, so passing
+AC-DET-1 against it demonstrates only that a rule responds to its own trigger. It cannot show that a rule or
+a model detects real generated media, and for a learned plugin it is circular by construction. Any detector —
+heuristic or learned — is therefore accepted only against a **held-out, third-party, licence-cleared labelled
+set** with per-generator labels, reporting measured AUC, EER and ECE with confidence intervals, and including a
+leave-one-generator-out run so generalisation to an unseen generator is stated rather than assumed. The
+fixture tests remain as regression coverage for the XAI contract; they are not the acceptance gate.
+*Rationale: this closes the difference between "the pipeline is tested" and "the verdict is trustworthy", which
+is what `GOAL-2` and `REQ-DET-3` are for.*
 
 `REQ-DET-2` Three model plugins are in scope for v2: face/image deepfake, audio clone/TTS, video
 temporal-artefact. Each MUST satisfy FC-3 end-to-end, and MUST run CPU-only by default (GPU is an
@@ -633,7 +643,7 @@ Landed and verified; commands and every printed count in README §2.5 and [`TODO
   entry the requested extra does not pull in is inert - which is what lets one file serve the image
   (`core,vision`), the dev environment and each CI profile without three of them drifting apart.
 * **The check** — `synthverify dependency-lock` (also chained into `synthverify freedom`, so `make freedom`
-  runs it): `47 packages in the declared closure, 48 pinned`, groups `core=11, dev=6, valkey=1, vision=2`,
+  runs it): `52 packages in the declared closure, 53 pinned`, groups `core=11, dev=8, jwt=1, valkey=1, vision=2`,
   `RESULT: PASS`. It compares the lock with **installed metadata** offline - the same closure walk FC-1 uses -
   and therefore fails in both directions: a closure member with no pin, a pin nothing depends on any more, a
   pin whose version differs from what is installed, and a lock line that is not a `name==version` pin at all.
@@ -811,11 +821,12 @@ Landed and verified; commands and every printed count in README §2.5 and [`TODO
   databases surviving); ruff clean.
 
 **Not claimed here, and the criteria do not ask for it:** this proves *tenant* isolation for the credentials
-that exist today. It is not an authentication-mechanism result — `REQ-IDAM-1` (JWKS-backed JWT/OIDC) and
-`REQ-IDAM-2` (scopes finer than three roles) are unstarted, `AC-IDAM-4`'s bounded-time verification over
-≥ 1 M events still has no checkpoint scheme, and per-organisation admin delegations are out of v1 by the
-interpretation above. Per §6.1 interpretation 6, the CI `tenancy` job's steps were executed here rather than on
-a hosted runner.
+that exist today. It is not an authentication-mechanism result — `REQ-IDAM-1` (JWKS-backed JWT/OIDC) has since
+been delivered as **T49** (AC-IDAM-1's two halves are graded by `tests/test_oidc.py`); `REQ-IDAM-2` (scopes
+finer than three roles) has since been delivered as **T48**; `AC-IDAM-4`'s
+bounded-time verification over ≥ 1 M events landed as **T47**, and per-organisation admin delegations are
+out of v1 by the interpretation above. Per §6.1 interpretation 6, the CI `tenancy` job's steps were executed
+here rather than on a hosted runner.
 
 ---
 
@@ -1051,7 +1062,8 @@ a single-threaded measurement on one machine, not a throughput SLA for an instan
 figures are `ru_maxrss` deltas over a measured idle floor rather than a container limit. The
 privileged-rewrite boundary above stands unchanged from `AC-IDAM-4`'s reading: a writer who re-links,
 re-seals *and* rewrites the counts is undetectable in-database, and external anchoring stays out of v1 (§6
-roadmap row "Multi-region + ledger archiving"). `AC-IDAM-1`/`AC-IDAM-2` remain the only open M3 items, and the
+roadmap row "Multi-region + ledger archiving"). `AC-IDAM-1` (JWT / OIDC) shipped as **T49** and `AC-IDAM-2`
+(scopes) as **T48**, so every M3 IDAM item is now delivered; the
 event-loop defect above was fixed in the release pass (T51), as a class of handlers rather than one route. One documentation-shaped gap, named because this file
 lists reasons rather than hiding them: of the seven `break_reason` shapes `docs/api.md` enumerates, six are
 pinned by their exact string in `tests/test_audit_checkpoints.py` and the predecessor-pointer one is detected
@@ -1125,6 +1137,9 @@ Landed and verified; commands and every printed number in README §2.5 and [`TOD
   files** where the README's row said 14. The mypy figure is a documentation fix rather than a code fix on
   purpose: `make typecheck` ends in `|| true`, so it gates nothing, and clearing 21 type errors inside a release
   pass would invalidate every leg measured above.
+  *(Superseded 2026-10-01 by **T50**: the tree now reads `Success: no issues found in 73 source files`, the
+  `|| true` is gone, and a CI step runs `mypy synthverify` as a real gate. The 21-error figure above is the
+  release-pass measurement it was, not the current state.)*
 * **The prose was edited after the measurement, so the measurement was repeated on the edited tree rather than
   asserted about it.** Substituting four legs' worth of printed numbers into `README.md`, `TODO.md` and this file
   is a change to shipped documents, and a document this repository ships is an artefact with gates: the
@@ -1172,9 +1187,9 @@ Landed and verified; commands and every printed number in README §2.5 and [`TOD
   pushed**, which stays user-gated. Their outputs are deliberately
   *not* quoted anywhere in the shipped tree: a commit hash and an archive's checksum cannot live inside the
   thing they identify, and writing them here would require a second commit that the tag would not cover. They
-  belong in the release body, which is the next thing the user does with their own credentials. And the 21
-  informational mypy
-  errors, the absence of an image-digest guarantee, and per-version Postgres support statements remain open
+  belong in the release body, which is the next thing the user does with their own credentials. The 21
+  informational mypy errors *(since closed by **T50**: zero errors, `make typecheck` gated)* were listed here as
+  open; what remains open is the absence of an image-digest guarantee and per-version Postgres support statements
   (§6.1 note 4's driver-position argument is unchanged).
 
 ---
@@ -1279,8 +1294,12 @@ claim), and the criterion's `< 60 s single-threaded` bound is measured on this m
 11.38 s on SQLite, 16.40 s on `postgres:16` — with four tampering probes inside sealed ranges and eleven
 mutations that are each caught. What the tranche actually fixed was memory, not speed: the read it replaces
 peaked at 2 392 MiB and 2 462 MiB against 65.5 and 69.3 MiB now.
-M3's exit criterion is therefore **not** met — all six `AC-INFRA-*` criteria are green, as are `AC-IDAM-3`
-and `AC-IDAM-4`, and the one open item is `AC-IDAM-1/2` (unstarted code, §13) — and where a criterion
+M3's exit criterion is therefore **met**: all six `AC-INFRA-*` criteria are green, as are `AC-IDAM-3`,
+`AC-IDAM-4`, and now `AC-IDAM-2` (scopes, shipped as **T48**) and `AC-IDAM-1` (JWKS-backed JWT/OIDC, shipped
+as **T49**) — the two items the paragraph above recorded as an unscheduled §13 change-control decision have
+since been taken up and delivered, the declared dependency it warned about being `PyJWT[crypto]` (MIT +
+Apache-2.0/BSD-3, both allow-listed) behind an optional `jwt` extra so the core closure and the air-gap path
+are unchanged — and where a criterion
 names Redis the delivery is Valkey or
 Postgres, on the licence grounds FC-1 states rather than as a convenience.
 
@@ -1433,8 +1452,8 @@ access + publishable attestation), R18 (real-time audio) — each mapped to the 
   explicit `ApiKey.platform_scope` column** (`0005`), never a reserved organisation *name*, and that the
   control plane `/api/v1/admin/**` therefore requires role **and** platform scope, i.e. **v1 has no
   per-organisation admin**. Consequences an operator should know: a tenant's own `admin` key cannot read
-  another tenant's job, `403` is reserved for a missing *capability* (which is what `AC-IDAM-2` will use it
-  for, so the two criteria do not fight), and promoting a second cross-tenant credential is a deliberate
+  another tenant's job, `403` is reserved for a missing *capability* (which is what `AC-IDAM-2`, delivered
+  as **T48**, uses it for, so the two criteria do not fight), and promoting a second cross-tenant credential is a deliberate
   `POST /admin/keys {"platform_scope": true, "role": "admin"}` rather than a naming convention. No FC root
   was added — the tranche needed no new dependency, so FC-1's root count is unchanged at 20 — and
   `REQ-IDAM-1/2`/`AC-IDAM-4` remain open as unstarted code, which §9 now states per criterion rather than
@@ -1531,6 +1550,28 @@ access + publishable attestation), R18 (real-time audio) — each mapped to the 
   **1 005 ms** behind `async def` and **3.6 ms** behind `def`.
   Interpretation **6** is unchanged and still binds: the `ledger` CI job's nineteen steps were executed here,
   and no hosted runner has run them. `REQ-IDAM-1/2` remain open as unstarted code; `AC-IDAM-4` no longer is.
+- **2026-09-30 (T48 + T49 — `REQ-IDAM-2` and `REQ-IDAM-1` delivered, the two items the entry above recorded
+  as an open §13 change-control decision):** `REQ-IDAM-2` / `AC-IDAM-2` shipped as **T48** (a 14-token scope
+  vocabulary, `require_scope(*scopes)` returning **403** that names the missing scope, `NULL` scopes falling
+  back to the key's role-equivalent grant, and no scope combination reaching another organisation — the
+  cross-org case still **404** per `AC-IDAM-3`); graded by `tests/test_scopes.py` (**15 passed**) and the
+  Alembic `0008_api_key_scopes` revision, whose `scopes` column is nullable and declared last so a migrated
+  `sqlite_master` stays byte-equal to a `create_all()` one — the same mechanic `0005` used. `REQ-IDAM-1` /
+  `AC-IDAM-1` shipped as **T49**: a bearer path in `synthverify/oidc.py` that verifies a JWT against a
+  locally minted test-key JWKS and rejects a token for another audience, mapping its claims onto the existing
+  admin/analyst/service roles rather than a parallel model, and flowing into T48's `require_scope`. It is
+  **algorithm-confusion-safe**: the `SV_OIDC_ALLOWED_ALGORITHMS` allow-list is checked before PyJWT sees the
+  token, so the `HS256`-signed-with-the-RS256-public-key forgery is refused at the seam (`tests/test_oidc.py`,
+  **23 passed**). The dependency the §13 paragraph above warned about is the only thing added — `PyJWT[crypto]`
+  (MIT, and `cryptography` Apache-2.0/BSD-3) behind an **optional `jwt` extra**, so `pip install synthverify`
+  pulls neither, `oidc_enabled` defaults false and short-circuits before any socket, and the FC-4 air-gap path
+  is unchanged. FC-1 now grades **52 packages from 22 declared roots** (`make freedom` PASS, +`PyJWT` and
+  +`types-PyYAML` as roots, +`cryptography`/`cffi`/`pycparser` in the closure), the lock is **53 pinned**, and
+  `alembic heads` = **`0008`**. The full SQLite suite is **1023 tests, 0 failures, 0 errors** (21 dialect/
+  service skips); ruff clean and `mypy synthverify` at **0 errors across 73 source files**. The Postgres/Valkey
+  and container portability legs have **not** been re-run on the 1023 tree — the services are down on this box
+  — so their rows in README §2.5 carry their last-measured number labelled as the previous measurement rather
+  than a borrowed current one.
 - Relaxing an FC constraint requires a *rejection of FC* section in the PR justifying why the goal
   survives; absent that, FC constraints are immutable.
 - Additions here MUST NOT duplicate `api.md` (surface), `architecture.md` (design), or

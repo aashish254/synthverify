@@ -232,7 +232,7 @@ def _decode_audio_ffmpeg(ffmpeg: str, data: bytes) -> AudioSignal:
 class VideoFrames:
     """Decoded (sampled) video frames plus container facts."""
 
-    frames: list = None  # list of PIL Images
+    frames: list = field(default_factory=list)  # list of PIL Images
     fps_hint: float = 0.0
     frame_count: int = 0
     width: int = 0
@@ -363,7 +363,7 @@ def _decode_video_ffmpeg(ffmpeg: str, data: bytes, max_frames: int) -> VideoFram
         "pipe:1",
     ]
     proc = subprocess.run(cmd, input=data, capture_output=True, timeout=120)  # noqa: S603
-    frames = []
+    frames: list[Image.Image] = []
     blob = proc.stdout
     pos = 0
     while pos < len(blob) - 2 and len(frames) < max_frames:

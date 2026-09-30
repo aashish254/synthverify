@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy import select
 
-from synthverify.auth import require_analyst
+from synthverify.auth import require_analyst, require_scope
 from synthverify.config import get_settings
 from synthverify.db import (
     ApiKey,
@@ -151,7 +151,7 @@ def _sniff_mime(media_type: str) -> str:
     }.get(media_type, "application/octet-stream")
 
 
-@router.post("/ingest", status_code=202, dependencies=[Depends(require_analyst), Depends(rate_limit)])
+@router.post("/ingest", status_code=202, dependencies=[Depends(require_scope("media:submit")), Depends(rate_limit)])
 def ingest_media(
     request: Request,
     file: Annotated[UploadFile | None, File(description="The media file to verify")] = None,
@@ -195,7 +195,7 @@ def ingest_media(
     return _job_accepted(job, created)
 
 
-@router.post("/ingest/batch", status_code=202, dependencies=[Depends(require_analyst), Depends(rate_limit)])
+@router.post("/ingest/batch", status_code=202, dependencies=[Depends(require_scope("media:submit")), Depends(rate_limit)])
 def ingest_batch(
     request: Request,
     files: Annotated[list[UploadFile], File(description="Up to 20 media files")],
@@ -206,7 +206,7 @@ def ingest_batch(
     api_key: ApiKey = request.state.api_key
     if len(files) > 20:
         raise HTTPException(status_code=422, detail="Batch is limited to 20 files.")
-    results = []
+    results: list[dict[str, Any]] = []
     for idx, f in enumerate(files):
         data = f.file.read()
         if not data:

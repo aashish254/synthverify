@@ -220,7 +220,8 @@ def active_hold_for(session: Session, sha256: str, job_ids: Iterable[str]) -> Le
         .order_by(LegalHold.created_at, LegalHold.id)
     )
     wanted = set(ids)
-    for hold in session.execute(stmt).scalars():
+    holds: Iterable[LegalHold] = session.execute(stmt).scalars()
+    for hold in holds:
         if hold.resource_kind == "media" and hold.resource_ref == sha256:
             return hold
         if hold.resource_kind == "job" and hold.resource_ref in wanted:
@@ -356,7 +357,7 @@ def _plan_objects(session: Session, store: MediaStore, plan: SweepPlan) -> None:
     for digest in digests:
         if not deleting_jobs:
             break
-        results = session.execute(
+        results: Iterable[dict[str, Any] | None] = session.execute(
             select(Job.result)
             .join(MediaAsset, Job.media_id == MediaAsset.id)
             .where(MediaAsset.sha256 == digest, Job.id.not_in(deleting_jobs))

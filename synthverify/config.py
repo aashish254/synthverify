@@ -85,6 +85,36 @@ class Settings(BaseSettings):
     admin_email: str = "admin@synthverify.local"
     api_key_prefix: str = "sv"
 
+    # ------------------------------------------------------- OIDC / JWT (REQ-IDAM-1)
+    # AC-IDAM-1 admits a locally minted JWT signed by a test-key JWKS alongside static API keys.
+    # Off by default so the static-key deployment shape (the one the container and every example
+    # in the docs use) cannot be widened by an unattended env override.
+    oidc_enabled: bool = False
+    oidc_issuer: str = ""  # SV_OIDC_ISSUER - exact match against the token's ``iss``
+    oidc_audience: str = ""  # SV_OIDC_AUDIENCE - exact match against ``aud``
+    oidc_jwks_url: str = ""  # SV_OIDC_JWKS_URL - where to fetch the signing keys
+    oidc_allowed_algorithms: str = "RS256,ES256"  # SV_OIDC_ALLOWED_ALGORITHMS, comma list
+    # Leeway tolerates clock drift on the ``iat``/``nbf``/``exp`` claims. 60 s is the OIDC
+    # convention; 0 makes the check hard, and anything larger is a policy statement the spec
+    # does not authorise anyone here to make.
+    oidc_clock_leeway_seconds: int = 60
+    # JWKS cache TTL. A kid not in the cached set forces one refetch inside the TTL rather
+    # than a hammering of the IdP; past the TTL a scheduled refresh rotates to the new key.
+    oidc_jwks_refresh_seconds: int = 3600
+    # Claim paths the bearer adapter reads. The defaults use the project's ``sv_`` prefix (the same
+    # one as ``SV_`` env vars and the ``sv_api_keys`` table); a deployment whose IdP emits different
+    # names overrides them here rather than in code. ``synthverify_`` is deliberately *not* used:
+    # that prefix is the Prometheus metric namespace, and the alert-rules gate reads every
+    # ``synthverify_…`` string literal in the package as an emitted metric name that must carry a
+    # HELP text, so a claim default named that way would be graded as an undocumented metric.
+    oidc_role_claim: str = "sv_role"  # dot path, single value or list
+    oidc_scopes_claim: str = "sv_scopes"
+    oidc_org_claim: str = "sv_org"
+    oidc_default_org: str = "default"
+    # A ``platform_scope`` claim is only honoured when this is set true, so an IdP that does
+    # not vet the field cannot mint cross-tenant credentials by adding a JSON key.
+    oidc_allow_platform_scope_claim: bool = False
+
     # ------------------------------------------------------------ rate limit
     rate_limit_rpm: int = 120  # requests per minute per API key
     rate_limit_burst: int = 40

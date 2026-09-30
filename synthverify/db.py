@@ -120,6 +120,11 @@ class ApiKey(Base):
     # (see ``0005``). Rows predating the revision read back as ``NULL``, which ``bool()`` and
     # ``auth.is_platform_scoped`` both treat as "an ordinary tenant credential".
     platform_scope: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    # Fine-grained scopes per REQ-IDAM-2. Nullable: a NULL scopes column means the key carries its
+    # role-equivalent grant, which is the backward-compatible path AC-IDAM-2 demands. When set, the
+    # value is a comma-separated list of scope tokens (e.g. "jobs:read,media:submit,artifacts:read").
+    # Declared after platform_scope for the same sqlite_master reason above.
+    scopes: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # Populated in-memory only (the raw secret is never persisted).
     plain_key: ClassVar[str | None] = None
@@ -132,6 +137,7 @@ class ApiKey(Base):
             "role": self.role,
             "organisation": self.organisation,
             "platform_scope": bool(self.platform_scope),
+            "scopes": self.scopes,
             "active": self.active,
             "rate_limit_rpm": self.rate_limit_rpm,
             "created_at": _iso(self.created_at),

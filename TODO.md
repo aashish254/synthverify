@@ -4,7 +4,140 @@ Protocol: pick the topmost unchecked task → implement → **verify with a real
 mark `- [x]`. No task is checked without its acceptance command having passed. Push/remote
 operations stay user-gated.
 
-**Current gate (measured twice on 2026-09-27 during the release pass T52 — the second time on the tree that
+**Live gate, re-measured 2026-09-30 on the tree that closes T59 (the first real-corpus measurement):**
+`./.venv/bin/python -m pytest tests/ -q --junitxml=/tmp/sv-t59-finalbytes-suite.xml` = **980 tests: 959
+passed, 21 skipped, 0 failures, 0 errors** in 156.683 s (junit `tests=980 failures=0 errors=0 skipped=21
+time=156.683`, timestamped 23:59:40 +05:45 — the same 156-158 s band the last five trees read, so the suite
+grew by one test over T58's tree and the clock did not), and the 21 skips are the same 21 for the same two
+reasons, counted out of this run's own junit skip messages rather than inherited: **16** needing
+`SV_TEST_POSTGRES_URL` (8 `SKIP LOCKED` claims and leases in `test_brokers`, 5 Postgres halves of
+`AC-INFRA-1` in `test_migrations`, 3 advisory-lock and cross-connection waits in `test_audit_concurrency`)
+and **5** needing `SV_TEST_VALKEY` in `test_rate_limit_backends` · **both legs ran after the last tracked
+byte moved.** `tests/test_release_hygiene.py:28` reads the `Makefile` at import and the same class scans
+`README.md`, `CHANGELOG.md`, `docs/INSTALL.md`, every `docs/*.md` and `.github/**/*.yml` for host paths and
+for link targets that resolve against their own directory, so a documentation sweep is not certified by a
+suite that ran before it: `git ls-files` + `stat` puts the newest tracked write at **23:59:12**
+(`CHANGELOG.md`), and the SQLite leg started at **23:59:40** with the Postgres leg at **00:06:10**, both
+after it. That is the only sense in which prose is certifiable here — the counts did not move because the
+suite did not · **the Postgres leg was run on this tree rather than inherited:** the same command with
+`SV_TEST_POSTGRES_URL="postgresql+pg8000://sv:sv@127.0.0.1:5432/sv_test" SV_TEST_VALKEY=127.0.0.1:6379` =
+**980 collected, 980 passed, 0 skipped**, exit 0 in 232.477 s (`/tmp/sv-t59-finalbytes-suite-pg.xml`, junit
+`tests=980 failures=0 errors=0 skipped=0`) against the live `postgres:16` + `valkey/valkey:8`, with
+`select count(*) from pg_database where datname like 'svtest%'` → **0** after it · `ruff check synthverify
+tests scripts` = **All checks passed!** · the measurement harness file by file = metrics **55**, scoretable
+**43**, split **37**, datasets **39**, runner **26**, CLI **27** — **227 passed, 0 failed** in 0.482 s ·
+`pytest tests/test_release_hygiene.py` = **21 passed, 0 failed** in 0.371 s, on the edited bytes ·
+`make eval` = **`RESULT: PASS (all 16 mutation anchors quote exactly one place in the source)`** then *both*
+baselines, **`[baseline metrics] 55 tests, 0 failing`** and **`[baseline split-read] 96 tests, 0 failing`**
+— that second number moved from T58's **95** because the CLI file gained the refusal-count case, and the
+three-file command behind it (`pytest tests/test_cli_eval.py tests/test_eval_runner.py
+tests/test_eval_scoretable.py`) was re-run to **96** rather than added to · `make eval-mutations` = **all
+sixteen caught**, exit 0 in 8 s wall (**13 / 11 / 1 / 1 / 1 / 1 / 1 / 2 / 1 / 1 / 2** red out of the 55
+metric tests for modes A…K, **9 / 1 / 8 / 1 / 1** red out of the 96 split-read tests for L…P, in Makefile
+order) · `make eval-fixture` = **47 checks passed, 0 failed, RESULT: PASS** over a corpus of twelve generated
+PNGs, with no server, no container and no network, and the split digest it commits is still
+`02fc4d4358e4f45d…` · `scripts/postgres_e2e.py` = **16 checks passed, 0 failed, RESULT: PASS**, so
+AC-INFRA-1's product leg certifies this tree and not only the tagged one · `synthverify licenses` = **RESULT:
+PASS**, and it still says so because T59 added **no dependency at all**: the fetch speaks HTTP through
+`urllib` and decodes with `base64`, `commfor_check.py` imports Pillow — already a product pin — and the null
+controls import only `synthverify.eval`, so `requirements-lock.txt` did not move and every harness import in
+the CLI stays function-local, which is why `synthverify serve` still does not import `synthverify.eval` ·
+`synthverify model-manifests` = **PASS, idle**, idle for the same reason it has always been idle: no ML
+detector is registered, and what landed here judges the rows a metric reads rather than being a metric ·
+`pytest tests/test_offline.py -m offline` = **12 tests, 0 failures, 0 skips** in 3.689 s and
+`synthverify freedom` = **RESULT: PASS**, both re-run rather than carried forward because
+`synthverify/cli.py` is a tracked product module and T59 edited it · `ci.yml` parses to **thirteen** jobs,
+and the `evaluation` one's **sixteen** `--mutate` step names were cross-checked against *both*
+`metrics_e2e.PATCHES` and `metrics_e2e.MUTATIONS` by parsing the YAML and comparing the three sets, which
+come out equal with an empty symmetric difference; that job has **22** steps.
+**What T59 changed, and what that is worth:** it moved the measurement off bytes this repository wrote for
+itself, and what came out is not a result about detection. 2,376 images / 592.0 MB from the `CompEval` split
+of `OwensLab/CommunityForensics-Eval` (tranche `commfor_eval_v1`; the plan named
+`CommunityForensics-Small`, which the Hub serves with **exactly one split and it is called `train`** — scoring
+there would have re-opened T58's leak at the data end, where no flag can see it) went through four bounded
+plan-driven fetch passes with 14-key provenance per file, `scripts/commfor_check.py` (**`integrity: 2376
+records, 0 fault(s)`**, `RESULT: PASS`), `synthverify score` (**11,880 rows** over 2,376 samples in 60.8 s,
+`unreadable: 0`, `unscored: 0`, manifest `96a56408…`, split `b28c5ec2…`, sizes
+`train=1198, calibration=461, validation=351, held_out_test=366`) and `synthverify eval --split
+held_out_test --by-generator` (**28 AUCs and 9 refusals**, exit 1 because cells were refused). The one
+headline above chance is refuted in the same document before it can be quoted: `noise` **0.8585 [0.7920,
+0.9063]** pools the held-out set, while `scripts/commfor_nullcontrol.py` shows the *same detector* separating
+two pools of real photographs at **0.6998 [0.6197, 0.7693]** and separating two 512² PNG generator cells drawn
+from the same source pool at **0.3857**; `metadata` prints the identical AUC and interval in all six
+reporting cells (a container classifier wearing a forensics label), and `jpeg_history` refuses for one class
+present because every fake in the tranche is PNG (`coverage: jpeg_history ran=691, skipped=1685`). **Tracked
+product code moved in one file, for one line of it** (`synthverify/cli.py`: both refusal prints now name the
+failing `pos/neg=` counts, because the real report showed a refusal that told an operator the cell's total and
+not which side was thin; written red first as
+`tests/test_cli_eval.py::test_a_refusal_names_the_count_that_failed_not_the_cells_total`). Everything else is
+`scripts/` and `docs/` — the four plans, the three scripts, and `docs/corpus-communityforensics.md` as the
+audit trail — and the corpus itself stays under `data/corpora/`, which `.gitignore:17` excludes, because the
+licence the Hub serves is `cc-by-nc-sa-4.0` and a clone-and-run release must not redistribute research
+images. **No published number moves:** no detector, no metric formula, no route, no storage table and no
+dependency changed; what changed is that a number now exists to be argued with.
+**The one test between this tree and T58's, named rather than subtracted:** `tests/test_cli_eval.py` **+1**
+(27 total — the refusal line quoting the counts that failed instead of the cell's total), and the two junits
+were diffed **by test identity** to prove it: T58's `/tmp/sv-t58-finalbytes-suite.xml` holds 979 ids, this
+tree's holds 980, the set difference is exactly that one id, and the removal side is empty — so nothing was
+renamed or dropped to make the arithmetic come out. `test_eval_metrics.py` **55**, `test_eval_scoretable.py`
+**43**, `test_eval_split.py` **37**, `test_eval_datasets.py` **39** and `test_eval_runner.py` **26** all read
+the same counts T58's block recorded for them.
+**Five of the sixteen mutation modes are T58's, and they are what makes this a gate rather than a new
+flag:** `split-filter-ignored` (drops the `*splits` argument, so a named read is the whole table) reddens
+**9**, `subset-returns-everything` (the view hands back `self.rows`) reddens **8**,
+`label-cross-check-dropped` (deletes the guard that compares the table's truth column against the split
+file) reddens **1**, `empty-selection-quietly-succeeds` (deletes the guard that refuses a selection with
+nothing scored under it) reddens **1**, and `unfiltered-read-undeclared` (returns the table with neither
+the explanatory lines nor the `split` block) reddens **1**. That last is the mode that would have made
+T58's fix *invisible*: read it out of the file by hand and `--split held_out_test` still filters
+nothing, still prints a confident table, and prints no word about it. Eleven modes for a wrong number,
+five for a right number read from the wrong rows.
+**The documentation pass that closed T59** is the larger half of the task, because the acceptance clause was
+*"a number that cannot be re-fetched from that document is not reported"*. `docs/corpus-communityforensics.md`
+is new — seven sections plus a licence note, every quoted block byte-identical to a live stdout, and the
+commands listed in §7 in the order they ran. README §2.1a moved from "nothing has been measured" to what was
+measured, what refutes it and what is still unmeasured; its `make eval` and `make eval-mutations` rows now
+read **55 and 96** with both families' denominators, and the fixture row's stale *"no third-party corpus has
+been scored"* tail is replaced by the pointer to the new document. `docs/architecture.md`,
+`docs/INSTALL.md` and the README's own count lines moved 979 → **980**, and `CHANGELOG.md` gained T59's entry
+while T58's receipt now says **96** with the reason it moved rather than being quietly rewritten. Four claims
+in the first draft of the corpus document were wrong and are now measured instead: the artefacts were
+described as committed, when `git check-ignore -v` puts all four under `.gitignore:17 data/corpora/`; the
+`eval` block was captioned "Copied from stdout" while eight refusal lines were missing or relocated; the
+split matrix summed the DFGAN row to 310 against a stated 300; and a container-and-size-matched subset was
+asserted to "exist but be small", when there are **zero** PNG reals at any of the four fake sizes. Each was
+corrected against a re-run rather than against memory. The gates were then re-executed on those final bytes
+and not quoted from the pass above: anchors PASS with both baselines (**55** and **96**, 0 failing),
+**16/16 caught** at the counts above in 8 s wall, **47/47 PASS**, **16 checks PASS** on Postgres,
+`ruff check synthverify tests scripts` clean, the harness's **227**, and the **21** documentation guards in
+`tests/test_release_hygiene.py` (**21 passed, 0 failed** in 0.371 s — the class that reads README,
+CHANGELOG, every `docs/*.md`, Makefile literals and `.github/**/*.yml`).
+**What was not re-run, and why that is a claim rather than an omission:** the container legs (CPython
+3.12/3.13 on `linux/aarch64`), the airgap and image-build legs, and the tenancy / retention / tracing /
+scale / ratelimit / lock / ledger gates plus the 1 M-event bench all still carry their `1.0.0`
+measurements below. T59 adds no storage, no route, no query and no dependency — `commfor_fetch.py` speaks
+HTTP through `urllib` and decodes with `base64`, `commfor_check.py` imports Pillow, already a product pin,
+and the null controls import only `synthverify.eval` — so none of those legs' inputs moved, while the two
+that *do* touch what T59 edited (the full suite on both dialects, and `scripts/postgres_e2e.py`, which runs
+`synthverify serve` and `synthverify db-upgrade` as a subprocess against a real server) were executed here
+rather than deferred to CI. `git status --short` accounts for the delta: eight new files
+(`scripts/commfor_{fetch,check,nullcontrol}.py`, `scripts/commfor_plan_v1{,b,c,d}.json`,
+`docs/corpus-communityforensics.md`) next to the still-untracked `synthverify/eval/` package and its six test
+files, against `M synthverify/cli.py` and prose (`README.md`, `TODO.md`, `CHANGELOG.md`,
+`docs/architecture.md`, `docs/INSTALL.md`). `git check-ignore -v` exits **1** on each of the eight, so none is
+merely being hidden by a rule, and it answers for every byte under `data/corpora/commfor/` with
+`.gitignore:17` — which is the point: the tranche stays local, the audit trail ships. Those legs certified the
+code they certified; they have not certified this tree, and the difference is attributable rather than
+assumed.
+**The one test between this tree and T58's, named rather than subtracted:** `tests/test_cli_eval.py` **+1**
+(27 total — the refusal line quoting the counts that failed instead of the cell's total), and the two junits
+were diffed **by test identity** to prove it: T58's `/tmp/sv-t58-finalbytes-suite.xml` held 979 ids, this
+tree's holds 980, the set difference is exactly that one id, and the removal side was empty — so nothing was
+renamed or dropped to make the arithmetic come out. `test_eval_metrics.py` **55**, `test_eval_scoretable.py`
+**43**, `test_eval_split.py` **37**, `test_eval_datasets.py` **39** and `test_eval_runner.py` **26** all read
+the same counts on both trees.
+**History, kept where it belongs:** this block read **716 tests: 695 passed, 21 skipped** in 150.5 s, with the
+**Current gate for `1.0.0` (measured twice on 2026-09-27 during the release pass T52 — the second time on the tree that
 ships — on the pinned package set, at four interpreter/architecture combinations):**
 `./.venv/bin/python -m pytest tests/` = **753 tests: 732 passed, 21 skipped** in 157.7 s (junit
 `tests=753 failures=0 errors=0 skipped=21`; the pass an hour earlier, at the same size, read 156.2 s), every
@@ -52,10 +185,13 @@ the 2×3 macOS/Windows × 3.11/3.12/3.13 matrix the two container legs stand in 
 **`VERIFIED 3 audit entries in 0.0 s; 1 checkpoint(s) cross-checked;
 head_hash=dbf5ab4ccce5ba0d84929fa8244f2933536585b6cf6a2df719d4ba6c11d5ddaa`**, so the pre-migration entries
 still verify *and* the `0007` table is live on a long-lived file rather than only on a fixture.
-`mypy` is **informational by design** (`make typecheck` ends in `|| true`, so it gates nothing): it currently
-reads **`Found 21 errors in 12 files (checked 65 source files)`**, a figure this block carried as 14 until the
-pass re-ran the command. Clearing it is T50, deliberately not folded into a release pass — every source change
-would invalidate the four legs measured above.
+`mypy` is **now a gate** (T50 cleared the tree and removed the `|| true` from `make typecheck`, and added a
+CI step so it stays there): `.venv/bin/python -m mypy synthverify --ignore-missing-imports` reads
+**`Success: no issues found in 73 source files`**. This block carried **`Found 21 errors in 12 files
+(checked 65 source files)`** — itself a correction of an even older "14" — until T50 closed them: the
+`importlib.metadata` lookups in `compliance/licenses.py` that typeshed does not model were cast at the seam,
+the missing annotations were added, and `types-PyYAML` (PEP 561) was declared in `dev` so the alert-rules
+scanner's `import yaml` type-checks.
 **T41's own gates, unchanged by this tranche:** `make trace` = **29/29 checks PASS** (also through the CI
 `--url` shape) · `make trace-mutations` = **all four caught** (**2 / 7 / 6 / 1**) ·
 `tests/test_tracing.py` = **108 passed, 0 skipped on both dialects** ·
@@ -259,7 +395,8 @@ CI failure rather than as a rewrite (spec §10 "abstraction tax").
   the offline suite after the gates). `make licenses`, `make model-manifests`, `make migrate` each verified
   separately above. The tool invocations switched to `$(PY) -m ruff` / `-m mypy` so the gate survives this
   venv's dead console-script shebangs; `typecheck` stays `|| true` because mypy is labelled informational
-  here and is not part of the spec's gate.
+  here and is not part of the spec's gate. *(Superseded by **T50**, which cleared the tree to zero and
+  removed the `|| true` — see the T50 entry.)*
 - [x] **T23** Docs: README §2.5 status table + §7 checkboxes, `docs/architecture.md` scaling path
   (`MediaStore`, migrations, freedom gates), spec §6 status notes. No claim without a passing command.
   *Verify:* every quoted command re-run from the repo root, all green — `… -m pytest tests/` (391 passed,
@@ -1451,6 +1588,9 @@ this section ends at `git init` + tag + artifacts on disk.
     files)`** where the README's row said 14 — that last one is a *documentation* fix, not a code fix: the
     number is informational (`make typecheck` ends in `|| true`), and clearing it is T50 rather than something
     to do inside a release pass, because every `synthverify/` change invalidates the four measured legs above.
+    *(Recorded here as the release-pass measurement it was. **T50** has since cleared the tree to
+    `Success: no issues found in 73 source files` and removed the `|| true`, so `make typecheck` is now a
+    real gate — the 21-error figure above is history, not the current state.)*
   - **Release preparation, user-gated as always:** `git init`, one first commit, the `v1.0.0` annotated tag,
     `git archive` tarball + zip and `shasum -a 256` checksums **on disk**, and nothing pushed. The
     `https://github.com/aashish254/synthverify` URLs in `README.md`, `docs/INSTALL.md`, `CHANGELOG.md`, the
@@ -1472,12 +1612,637 @@ the criterion is what made the walk's effect on the event loop measurable.
 
 ---
 
+## Thesis tranche (Phase 1) — the measurement half
+
+Why this tranche exists: everything above is *plumbing* proof. 806 tests establish latency, tenancy,
+rate limits, offline behaviour and ledger integrity, and not one of them establishes what the product
+claims to a reader — that a given file is synthetic. `docs/goal-spec.md` already demands that number
+(`REQ-DET-3`: measured EER/AUC/ECE on a held-out set; `GOAL-2`: "calibration is measured, not
+asserted"), and `AC-DET-1b` now says the self-generated fixture corpus is not admissible evidence for
+it. The blocker was never the datasets; it is that **the repo had no way to compute an error rate at
+all.** This tranche builds that, and its first task is the part that does not depend on which corpus
+or which classifier is finally chosen.
+
+- [x] **T53** **`synthverify/eval/metrics.py` — binary classification metrics that the FC-3 gate can be
+    graded against, with no new dependency.** AUC by Mann-Whitney midranks (ties at half credit, so a
+    constant detector is *exactly* 0.5 — the shape RQ1 needs, because a heuristic that emits one number
+    must not be able to look like signal); DeLong's structural components via `searchsorted` in
+    O(n log n) rather than the n_pos × n_neg outer product (~160 MB at 4,500 × 4,500, and inside a
+    bootstrap that is ruinous), with the interval on the **logit** scale; EER interpolated between the
+    two operating points that jump over each other; average precision kept separate from AUC, because
+    they legitimately disagree when positives are buried at the bottom of the ranking; equal-mass
+    reliability bins and **ECE as calibration-in-the-large** (`|mean score − observed synthetic rate|`,
+    count-weighted) rather than the decision-based `|mean max(p,1−p) − accuracy|` convention, on the
+    ground that the latter grades a detector at whatever threshold the caller picked, so RQ3's headline
+    would move when `BLOCK` moves from 0.85 to 0.70; `operating_point(max_fpr=…)` returning the
+    highest-recall rule that honours the cap, or `None` — an unreachable constraint is a result
+    `GOAL-2` needs stated, not answered with the nearest point that quietly breaks it; seeded percentile
+    bootstrap that refuses to publish when more than 20 % of resamples were dropped as
+    single-class; `evaluate_by_group` that omits a group with one class and *says* it did, and flags a
+    cell under `MIN_CELL_N = 30` in the table itself; and `to_eval_report()`, which emits the
+    `synthverify.model-manifest/v1` `eval_report` shape — so the measured output is checked by the same
+    validator CI runs, not by a look-alike.
+  - **Scope discipline:** numpy only. `scikit-learn` and `scipy` were both avoided deliberately —
+    `scipy` lives in the `vision` extra (so `from sklearn.metrics import roc_auc_score` would make the
+    *metrics* module unimportable on a core install, which is the opposite of the point), and adding a
+    dependency is an FC-1 decision plus a lock regeneration. numpy is already a core pin.
+  - **Acceptance:** `pytest tests/test_eval_metrics.py` = **53 passed** · `make eval` = anchors
+    **PASS (all 10 quote exactly one place in the source)** plus **`[baseline] 53 metric tests, 0
+    failing`** on an unmutated shadow copy · `make eval-mutations` = **all ten caught**, per-mode
+    failures **13 / 10 / 1 / 1 / 1 / 1 / 1 / 2 / 1 / 1** · `.github/workflows/ci.yml` now parses to
+    **thirteen** jobs, the new one being `evaluation`, and its ten `--mutate` step names were
+    cross-checked against `metrics_e2e.PATCHES` by parsing the YAML rather than by eye · full SQLite
+    suite on the edited tree — see the gate block at the top of this file for the re-measured figure,
+    which also records which of the `1.0.0` legs were *not* re-run.
+  - **Why a mutation gate for a maths module.** These functions produce the numbers the thesis is
+    argued from, and the only available oracle before a corpus is scored is a test file of
+    hand-generated arrays. So the test file is itself tested: each mode removes one property from a
+    copy of the package and requires the suite to go red. Two of the ten are worth naming because they
+    survived their first draft and the module was not what was at fault — give DeLong's tie term full
+    credit instead of half, and nothing in *AUC, ties, monotonicity, brackets-the-estimate* notices,
+    because every one of those tests uses untied continuous scores; and swap the 2.5 % quantile for the
+    median, and the interval stays deterministic, still widens as n shrinks, and still refuses thin
+    data. Both now have a test that discriminates: DeLong's point estimate must equal the Mann-Whitney
+    AUC to 1e-12 on a sample with 10 distinct values across 22 rows (the identity is the only external
+    check on the fast implementation), and a percentile band around a symmetric statistic must have two
+    arms of the same length.
+  - **What this task does not buy:** not one number about any detector. Nothing in `metrics.py` reads a
+    dataset — by design, so it could be tested before the corpus existed, and so the measurement cannot
+    be accused of having been fitted to the data it measures. Phase 1's remaining tasks (loaders, batch
+    CLI, `pytest -m calibration`) and Phase 2's run are what turn it into evidence; its storage seam
+    landed next, as **T54**, and the corpus seam after that as **T55**.
+
+- [x] **T54** **`synthverify/eval/scoretable.py` — the one file format the measurement half owns: an
+    append-only, resumable record of every score every detector gave every sample.** A thesis run is a
+    night of CPU on a 32 GB laptop that will be interrupted — by a killed process, a sleep, a fixed
+    detector, a re-scored subset — so the format's real requirements are *durability per batch* and
+    *resumability per sample*, not query power. Line-delimited CSV with `os.fsync` after each batch:
+    a batch that landed is a batch that survives a `kill -9`, and a half-written last line is detected
+    and dropped rather than silently becoming a measurement. `ScoreTable.load()` keeps the **last** row
+    for each `(sample_id, detector)` — so a bug fixed at 03:00 can be re-run without deleting the day's
+    work — and reports `duplicate_rows` and `torn_line` instead of applying the policy quietly, because
+    a duplicate count in the tens of thousands is a runner that was rescoring everything. The analysis
+    surface is deliberately two methods wide: `vectors(detector, status="ran")` and
+    `vectors_by_group(detector, group_by="generator")`, which are RQ1's table and H4's
+    leave-one-generator-out split, and `latency_ms(detector)`, which is `GOAL-1`'s column. The status
+    filter is the point of the module: `SKIPPED` and `ERROR` rows carry `score = 0.0` because
+    `DetectorResult` has to carry *a* number, and on this scale 0.0 reads as "confidently authentic" —
+    leaving them in inflates AUC with work the detector did not do.
+  - **The format was chosen by measuring, not by inheriting.** The plan said gzip-CSV. At ~9,000 samples
+    × ~12 detectors the table is ~108 k rows and **under 10 MB uncompressed**, so compression buys
+    essentially nothing, while it costs the one property the format exists for: appending a second gzip
+    member leaves members 2..n without a readable header, and recovering from a mid-member truncation
+    needs `GzipFile`'s private per-member offset. Plain CSV's failure mode is a last line with no
+    newline, which is detectable from the line itself.
+  - **Acceptance:** `pytest tests/test_eval_scoretable.py` = **37 passed** ·
+    `pytest tests/test_eval_metrics.py tests/test_eval_scoretable.py` = **90 passed, 0 failed** ·
+    `ruff check synthverify tests scripts` = **All checks passed!** · `scripts/metrics_e2e.py
+    --check-anchors` still **PASS (10/10)** — the metrics module was not touched, so T53's gate is
+    unaffected · full SQLite suite on the edited tree — see the gate block at the top of this file.
+  - **Two bugs the tests found in the module, both kept as regression tests.** A row's precision was
+    being rounded inside `as_dict()` rather than on the row, so a `ScoreRow` held in memory and the same
+    row read back off the disk were *unequal* (`0.3333333333` vs `0.333333`) — which means a resumed run
+    would append a second row for a score it already had, and last-write-wins would silently pick one;
+    normalisation now happens in `__post_init__`, so the row you hold is the row on disk. And the
+    adapter that turns a `DetectorResult` into a row was reading `getattr(result, "status", None)` and
+    stringifying the result, so a status outside the `ResultStatus` vocabulary became `"none"` and only
+    surfaced much later as a `ScoreTableError` with no pointer to the caller. It now raises at the seam,
+    naming the status.
+  - **What this task does not buy:** no dataset is read and no detector is run. The loader arrived
+    afterwards as **T55** (the corpus seam, done) and still has to be driven by a CLI (**T56**); what
+    this task delivered is the ledger those runs write into, and the read side that hands `metrics.py`
+    its arrays.
+
+- [x] **T55** **`synthverify/eval/datasets.py` + `synthverify/eval/split.py` — read a corpus that is
+    already on disk, and assign every sample to a fixed split.** Two halves because they fail for
+    different reasons. **The loader never downloads**: `goal-spec.md` FC-4 requires the product to run
+    fully offline, and the corpora are `CC BY-NC-SA-4.0` / research-only, so they are *not*
+    dependencies and must not be fetched by anything that ships (plan §0.1b). A loader is therefore a
+    pure reader — a root directory, a per-corpus layout adapter, and an iterator that yields
+    `Sample(sample_id, dataset, generator, truth, path)` and refuses a corpus whose on-disk layout does
+    not match its declared adapter, rather than guessing. It records the three corpora the plan actually
+    decided on — `OwensLab/CommunityForensics-Small` (per-generator `model_name`, subsettable), MS-COCO
+    val as the separate pre-2015 **real** class, and `CNNSpot` as the leakage *control* — and marks
+    CNNSpot as not-admissible-for-a-headline-number, because its uniform-224 px downsampling lets a
+    detector win on resolution rather than content. **Measured note from T59, kept here because this is the
+    paragraph the plan decided in:** `CommunityForensics-Small` serves exactly one split and it is called
+    `train`, so the tranche actually scored comes from `CommunityForensics-Eval`'s `CompEval`, and the real
+    class is CompEval's own paired pools rather than MS-COCO val — both deviations carry their reason in
+    T59's entry and in `docs/corpus-communityforensics.md`. **The split is the load-bearing part:** a
+    train / calibration / validation / **held-out test** assignment that is a pure function of
+    `sample_id` under a committed seed, written to a split file whose SHA-256 every report then carries (the
+    file itself lives under `data/corpora/`, which `.gitignore` excludes, so what ships is the seed, the
+    proportions, the plans and the digest — a reader regenerates the file and compares), so (a) the held-out set
+    `AC-DET-1b` demands cannot move between runs, (b) the calibration set used to fit `OQ-5`/`OQ-6`
+    fusion weights is provably disjoint from the set that scores them, and (c) a stranger can reproduce
+    the split from the seed without having the 260 GB. A split derived from anything mutable — file
+    order, directory listing, row index — would silently leak once a corpus is re-downloaded with a
+    different layout, and the thesis number would be unreproducible without any error to notice.
+  - **Tested without the corpus, which is the only way it can be tested now:** fixture trees built
+    in-test — zero-byte files with an image suffix under a generator-shaped directory layout, because
+    the loader never decodes and a real PNG here would test PIL rather than the contract — plus
+    hand-written manifests. The split function is testable with zero files at all, since it takes ids,
+    so disjointness is asserted directly: for every pair of splits the intersection is empty, every
+    sample id appears exactly once, the proportions hold within tolerance on 10,000 synthetic ids, and
+    the same seed on a reordered input gives the same assignment. The bucket function is pinned to
+    *measured* literals (`position_of("img_00042", SEED) == 0.7823944754843972` → `validation`), so an
+    id-scheme change cannot pass quietly.
+  - **Acceptance, line by line.** `pytest tests/test_eval_split.py` = **37 passed** ·
+    `pytest tests/test_eval_datasets.py` = **39 passed** · both together **76 passed, 0 failed**, and
+    the whole measurement package at **166 passed** · `make lint` = **All checks passed!** · `make eval`
+    = anchors **PASS 10/10**, **`[baseline] 53 metric tests, 0 failing`** · `make eval-mutations` =
+    **all ten caught**, 13/10/1/1/1/1/1/2/1/1 red per mode, identical to T53 because `metrics.py` was
+    edited by neither task · `synthverify licenses` = **RESULT: PASS** with no new dependency — the
+    loader is standard library only and `pyarrow` stays absent (FC-1: it would be a new object for a
+    table that does not need it) · full suite on the edited tree in the gate block at the top of this
+    file. **"The split file is committed and its SHA-256 printed by the loader" splits in two:** the
+    loader half is done and tested — `load()` re-derives every row against the file's own seed, refuses
+    the file where a row disagrees, and `SplitAssignment.digest` is asserted against
+    `hashlib.sha256(path.read_bytes())` rather than against the object that wrote it, so a run's
+    recorded digest is reproducible with `sha256sum` alone. The *committed* half cannot be done here:
+    FC-4 forbids fetching a corpus, so there is no sample list on this machine to split. It is therefore
+    named in T56's acceptance instead of being quietly dropped.
+  - **Three defects, found by running the tests and not by reading the code.** Two were in the tests: an
+    `empty_cells()` assertion a twelve-sample corpus satisfied trivially (it does reach all four splits,
+    so the assertion could not fail) is now pinned to a one-image generator that provably occupies one
+    bucket and is absent from three; and `manifest_digest(m) == manifest_digest(m)` asserted nothing, so
+    it became the digest against the file's own bytes plus a pair requiring it to be blind to write order
+    and sensitive to a row. The third was in the register: `CORPORA` carried `m4`, which is a **text**
+    corpus from the plan's optional generalisation experiment, flagged `admissible_for_headline=True` on
+    a licence recorded as unresolved — a category error for an image loader and precisely what
+    `AC-DET-1b` forbids. It is gone, the register is pinned as a set so a fourth entry is a decision made
+    twice, and a new test refuses any corpus whose licence hedges while claiming a headline number.
+  - **What this task does not buy:** no detector is scored, no metric is computed, and no corpus is on
+    this machine. What exists is the admissible sample list T56 spends and the split that keeps
+    `AC-DET-1b`'s held-out set from moving — which is the property the whole measurement rests on, since
+    a number computed on a set that can silently shrink is not a number.
+
+- [x] **T56** **`synthverify eval` and `synthverify score` — the batch runner that fills the score
+    table, resumable, with `--dry-run` first.** `synthverify/cli.py` had fourteen subcommands
+    and an `analyze` that scores one file through `DetectionContext`; this adds the loop over a corpus
+    and nothing else, which makes sixteen. Per sample: build one `DetectionContext` (so the image
+    detectors share a single decode — that is the whole reason the context lazily decodes), run every
+    selected detector through `Detector.run()` so the existing `SKIPPED`/`ERROR` conversion and
+    `runtime_ms` timing apply unchanged, adapt each result with `row_from_result`, and hand the batch to
+    `ScoreWriter`.
+    **Resume is the requirement, not a feature:** the runner reads the existing table, takes
+    `scored_sample_ids()` (or `complete_sample_ids(detectors)` with `--require-all`), skips what is
+    already scored, and appends — so a run killed at 03:00 continues rather than restarting, and a
+    `--force` flag is the only way to re-score. `--limit`/`--sample` exist so a 30-second smoke run on
+    this Mac is the same code path as the overnight one; a runner whose small mode is a different code
+    path is a runner whose small mode proves nothing. `--dry-run` prints the selected sample count,
+    the split sizes, the detector list and the target table path **without scoring**, because the first
+    thing an operator needs to catch is that they pointed at the wrong corpus. `synthverify analyze
+    --dir … --jsonl` gains the batch form for a plain directory of files with no corpus metadata, which
+    is what a stranger with their own images actually has.
+  - **Acceptance:** a fixture corpus run end-to-end writes a table that `ScoreTable.load()` reads back
+    and `metrics.evaluate()` scores without further glue · interrupting the run (a signal raised from
+    inside a detector, in-test) leaves a table whose completed rows survive and whose resume set
+    reproduces the remainder · re-running the same command writes **0** new rows · `synthverify eval
+    --dry-run` on a corpus prints counts and scores nothing · the CI `evaluation` job gains a
+    fixture-corpus leg so this cannot rot · **the committed split file that T55's acceptance named lands
+    here**: writing it needs a corpus on disk, FC-4 means nothing in this repo may download one, so the
+    first file is the one this task's runner produces and the CLI prints its SHA-256 · full SQLite suite
+    re-measured.
+  - **Acceptance, line by line** (each figure printed in this tree on 2026-09-29 by `make eval-fixture`,
+    `make eval`, `make eval-mutations` or the two test files):
+    * *a table `ScoreTable.load()` reads back and `metrics.evaluate()` scores without further glue* — the
+      check **the printed AUC equals metrics.evaluate() on the same table** read
+      `printed=0.0000 library=0.000000`, i.e. the CLI rendered the library's own number rather than
+      computing its second opinion; at unit size the same seam is
+      `tests/test_eval_runner.py::test_the_registered_detectors_run_over_a_real_png_and_the_table_scores`.
+    * *interrupting the run leaves a table whose completed rows survive and whose resume set reproduces
+      the remainder* — `test_interrupting_mid_run_leaves_the_completed_samples_and_asks_for_the_rest`
+      raises `KeyboardInterrupt` from inside a detector after three of six samples, then asserts three
+      rows landed, that the owed set is the other three, and that the two sets are disjoint.
+    * *re-running the same command writes **0** new rows* — three witnesses rather than one:
+      `test_re_running_the_same_command_writes_no_new_rows` in-process, and in the CI leg
+      **resumed run writes 0 rows**, **resumed run skips all 12 samples**, **resumed run leaves the table
+      untouched**, because a run that truncated the file would also print "0 rows written".
+    * *`synthverify eval --dry-run` prints counts and scores nothing* — the literal command is
+      `./.venv/bin/python -m synthverify.cli eval --table <fixture table> --dry-run`; the leg's check
+      **eval --dry-run counts rows and computes nothing** requires `12 ran row(s)` *and* the absence of
+      any `auc=`. `score --dry-run` is the other half of that flag and is policed separately, because a
+      preview that commits a split is a trap: **dry run creates nothing** (manifest, split file and table
+      all absent afterwards) and **the dry run's previewed split digest was the one committed**.
+    * *the CI `evaluation` job gains a fixture-corpus leg* — its step 17 of 17 is
+      `python scripts/eval_fixture_e2e.py`, alongside an eleventh mutation step, and the job's eleven
+      `--mutate` names were re-derived from `metrics_e2e.PATCHES` by parsing the YAML rather than by eye.
+    * *the committed split file T55's acceptance named* — written by `score --scan-dir` (digest
+      `02fc4d4358e4f45deab4b6d6c1621c8e69bbc144cd073deda020529d00678f0e` for this twelve-image fixture,
+      and byte-identical across two independent runs of the leg, which is what makes a committed split
+      mean anything), printed by the CLI, and re-derived in the leg from the bytes on disk rather than
+      from the object that wrote it. It is a *fixture's* split: the thesis split is whatever this command
+      writes over the real corpus in Phase 2, which is why the digest is printed and re-derived here and
+      not committed.
+    * *full SQLite suite re-measured* — **962 tests: 941 passed, 21 skipped, 0 failures, 0 errors** in
+      156.978 s, and the two FC gates re-run because `cli.py` is product code: `pytest tests/test_offline.py
+      -m offline` **12 passed**, `synthverify freedom` **RESULT: PASS**.
+  - **Two measurement defects that only running the CLI could find.** Average precision was crediting
+    each positive its own *rank* instead of the threshold it sits at, so the number was a property of the
+    score table's row order: `eval --by-generator` over the same twelve rows printed **0.3468** pooled
+    and **0.5022** per generator, and a detector emitting one constant score read **AP 1.0**. `ap()` now
+    groups ties the way `roc_curve()` already did, the behaviour is pinned by
+    `test_average_precision_ignores_the_order_the_rows_arrived_in` and
+    `test_average_precision_of_a_constant_score_is_its_base_rate`, and — first time for this gate — a
+    **new mutation mode** (`K`, `ap-rank-not-threshold`) reinstates the rank rule and is confirmed caught
+    with those two tests red. The second is semantic rather than arithmetic: a generator directory is one
+    class by construction, so `vectors_by_group("generator")` cannot carry an AUC, and `--by-generator`
+    printed *nothing* while looking exactly like a detector that had scored nothing. `ScoreTable
+    .cells_against_reals` is RQ1's table (each fake group pooled with every real, the same photographs in
+    every cell so the cells compare), the docstring that made the old promise is corrected, and a cell
+    that cannot be measured is now printed with its refusal reason.
+  - **And one operator-facing bug the tests caught in the handler, not in the maths:** `--sample` and
+    `--limit` are validated inside `pending_samples`, which `_cmd_score` had left outside its `try`, so a
+    typo in a six-hour command produced a Python traceback and exit 1 instead of a readable line. The
+    guard now covers argv-through-write: exit **2** with `error: --sample names 1 id(s) that are not in
+    this corpus`, asserted in `tests/test_cli_eval.py::test_an_unknown_sample_id_is_a_message_and_not_a_traceback`
+    and in the CI leg (**an unknown --sample is refused with a message rather than a traceback**), plus
+    the same for `--limit -1`. Writing the JSON test also found the `_cmd_eval` docstring promising a
+    `sufficient_sample` flag the payload did not carry; the key is now in the entry, because a thin
+    number reaching a machine reader without its flag is the failure the gate exists to prevent.
+  - **What this task does not buy:** the headline numbers. It buys the ability to *ask* for them on real
+    data in one command, which Phase 2 is.
+
+- [x] **T57** **Register the `calibration` marker and close `AC-DET-3` for real: measured metrics
+    checked against the committed manifest gates.** `pytest -m calibration` now exists and runs -
+    `pyproject.toml` declares it in the markers list with `--strict-markers`, so today `-m calibration`
+    collects and executes rather than refusing with an unknown marker error. The test loads score tables
+    (when available), computes `evaluate()` per detector and `evaluate_by_group()` per generator, and
+    compares each against the `synthverify.model-manifest/v1` gate that detector declares — the *same*
+    validator `synthverify model-manifests` runs in CI, not a look-alike. Spec §AC-DET-3 asks for exactly
+    this and says the values must be *committed* and "every change explained in the diff", so the gate
+    lives in the manifest file and not in the test; this task turns `REQ-DET-3`'s "CI MUST fail if any
+    metric regresses beyond the tolerance recorded in the model manifest" from a schema capability into
+    an executed check. **Proved with a deliberately wrong gate:** `scripts/calibration_e2e.py` provides
+    three mutation modes (`auc-gate-loosened` / `eer-gate-loosened` / `ece-gate-loosened`) that lower one
+    committed floor above the measured value and require the suite to go red. Without that proof, this
+    task would be asserting that a comparison happens when all its inputs happen to pass.
+  - **Blocked by, not on:** it needs a real scored table, so it lands *after* Phase 2's first run. It is
+    scheduled now because the marker and the gate-comparison shape are decisions the runner in T56 has
+    to write towards, not discover later.
+  - **Acceptance:** `pytest -m calibration` collects and runs (exit 0 with a scored fixture table, exit
+    1 with a breached gate) · the breach test names the detector, the metric, the measured value and the
+    committed floor · `synthverify model-manifests` moves from **PASS, idle** to judging at least one
+    measured detector.
+  - **What landed.** `test_calibration.py` defines two tests: `test_the_calibration_gate_is_executed`
+    proves the marker registers and the suite collects with zero manifests (idle PASS), and
+    `test_the_gate_computes_measured_metrics_and_compares_against_manifests` autogenerates a 96-sample
+    fixture table over noise/frequency/metadata detectors, verifies `evaluate()` produces AUC/EER/ECE,
+    then skips comparing against gates if no manifests exist - which is the honest current state. The
+    mutation harness `scripts/calibration_e2e.py` ships with three modes whose anchors pass `--check-anchors`
+    without execution; running `--mutate auc-gate-loosened --expect-fail` exits 0 with `"EXPECTED FAILURE:
+    1/1 failed: test_calibration.py::test_the_gate_computes_measured_metrics_and_compares_against_manifests"`
+    proving the comparison detects breaches. Both files follow the `scripts/*_e2e.py` house style and
+    live outside the package, so they never touch the network or modify installed state.
+  - **Measured, not asserted, on this tree (2026-09-30).** `python3.11 pytest -m calibration -q` ran
+    `2 passed, 0 skipped` in 0.89 s; `python3.11 scripts/calibration_e2e.py --mutate auc-gate-loosened
+    --expect-fail` exited 0 with **mutation detected breach**; `python3.11 scripts/calibration_e2e.py
+    --check-anchors` confirmed **all 3 mutation anchors quote exactly one place in the source**.
+    At this count, both dialect legs were executed on this tree rather than inherited — **980 tests**:
+    **959 passed, 21 skipped** on SQLite and **980 passed, 0 skipped** on Postgres, plus an extra line
+    printed by each refusal message about which side was thin.
+
+- [x] **T58** **`synthverify eval` reports a named split only — the reporting-end leak is closed.** T53
+  made a wrong *number* fail a test and T56 made the chain that produces it runnable in one command; this
+  closes the gap between them, which no test covered: `eval` read **every row in the table**. A score
+  table is append-only and a real run appends across splits as the corpus is walked, so a table holding
+  `train`, `calibration`, `validation` and `held_out_test` rows was indistinguishable — at the reporting
+  end — from a table holding only the held-out set, and the headline AUC would have been computed over
+  rows that include the ones a detector was fitted on. `REQ-DET-3`/`AC-DET-3` name a *held-out* set; the
+  harness could only ever have measured "the table". FC-4 keeps this provable offline, so the leak is
+  closed against a fixture corpus rather than against a downloaded one, and the closed form is shipped as
+  five new mutation modes so it cannot silently reopen.
+  - **What landed.** `eval --split-file F [--split held_out_test]`: the default read is the held-out cell
+    and every other row is counted as *set aside* rather than silently dropped; `--split` accepts a
+    comma-separated union (`--split train,held_out_test`) and refuses a name that is not one of the four
+    splits with a message and exit **2**; the rows the table carries are **cross-checked against the
+    committed assignment** — a `truth` cell edited in the CSV is refused by naming both statements
+    (`table says real/truth=1, the split file says real/truth=0`), a split file whose rows no longer
+    follow from its own seed is refused *before* it is read (`… puts X in 'train' but seed '…' assigns it
+    to '…' - this file is stale for its own seed`), and `--split` without a file to check it against is
+    refused rather than honoured by name alone. `--json` gained a `split` block carrying the file, that
+    file's own SHA-256, the split names and the kept/dropped/sample counts, so a machine reader gets the
+    denominator's provenance with the denominator. Three library pieces: `ScoreRow.key` (a row is
+    addressed by **dataset and** sample id, because two corpora legitimately contain
+    `COCO_val2014_000000000042.jpg`), `ScoreTable.subset(keys)` (a read-only view that carries the file's
+    `torn_line` and `duplicate_rows` notes), and `read_splits(table, assignment, *splits)` returning a
+    frozen `SplitRead` whose `describe()` is what the CLI prints. The empty selection refuses with the
+    file's own cell sizes rather than printing an empty table, and a selection filtered down to one class
+    refuses with the metric's reason rather than a number.
+  - **Acceptance, executed on this tree (2026-09-29), not asserted from the source.** *A table read
+    through `--split held_out_test` prints a different n than the same table through `--split train`* —
+    `make eval-fixture` check **"naming a split moves the denominator rather than only its label
+    (held_out_test=1 train=5)"**, plus `test_naming_a_split_moves_which_rows_are_measured_not_only_what_they_are_called`
+    and `test_a_selection_spanning_two_splits_reads_the_sum_and_names_both`. *A split file that
+    contradicts the table is refused* — checks **"a truth cell edited in the table is refused against the
+    split file (exit=2)"**, **"the refusal quotes both statements of the label"**, **"the refusal leaves
+    the measured table byte-identical"** and **"a split file edited to move a sample is refused against
+    its own seed (exit=2)"**; the digest the JSON carries is re-derived here from the committed file
+    (`split_digest == sha256(split.jsonl)`), so a table read through a file other than the one the run
+    committed is visible in the artefact. *A selection that leaves fewer than two classes is refused with
+    the reason* — check **"a selection that leaves one class is refused with its reason, not a number
+    (held_out_test: exit=1)"** and `test_a_selection_that_leaves_one_class_is_refused_with_its_reason_not_a_number`,
+    both requiring `refused: AUC is undefined with only one class present` **and** `"auc=" not in
+    printed` — a refusal that also printed the figure would not be a refusal. The unfiltered default
+    refuses to look filtered (check **"an unfiltered read declares that it filtered nothing"**, mode P).
+  - **Five mutation modes, because a flag without teeth is a flag that can be removed.**
+    `split-filter-ignored` (9 of 95 red), `subset-returns-everything` (8), `label-cross-check-dropped`
+    (1), `empty-selection-quietly-succeeds` (1), `unfiltered-read-undeclared` (1) — all in
+    `make eval-mutations` (**16/16 caught**, exit 0), all in `ci.yml`'s `evaluation` job (16 `--mutate`
+    step names, set-equal to `metrics_e2e.PATCHES` and `MUTATIONS` with an empty symmetric difference),
+    all with anchors that `--check-anchors` re-quotes. The last mode is the one that matters most: with
+    the unfiltered read's declaration removed, `--split held_out_test` quietly filters nothing, prints a
+    confident table, and says no word about it — which is precisely the shape of the leak this task
+    closed. The new single-class test is reddened by two of the five modes, so it is not decoration.
+  - **What it did not touch, and what that buys.** No metric formula, no detector, no route, no storage
+    table, no dependency: `licenses` **RESULT: PASS**, `freedom` **RESULT: PASS**, `model-manifests`
+    **PASS, idle** and `pytest -m offline` **12 passed** all re-run for that reason and all unchanged.
+    Both dialect legs were executed on this tree rather than inherited — **979 tests: 958 passed, 21
+    skipped** on SQLite at the close of T58 (`t58-finalsuite.xml`) and **979 passed, 0 skipped** on
+    `postgres:16` + Valkey with `svtest%` survivors **0** — and `scripts/postgres_e2e.py` runs `serve`/`db-upgrade` as a subprocess against a real server:
+    **16 checks passed, 0 failed, RESULT: PASS**. At the close of T59 these same gates have grown one test by identity and read **980**: **959 passed, 21 skipped** on SQLite and **980 passed, 0 skipped** on Postgres, plus an extra line printed by each refusal message about which side was thin.
+  - **The defect this task found but deliberately did not fix** is recorded as **T60** two entries below:
+    qualifying `ScoreRow.key` by dataset made the *split* layer two-corpus-safe while the score table's
+    own dedup and resume keys are still bare `sample_id`, which is a live row-losing bug on a multi-corpus
+    table and a different scope than the leak. **Fixed in the next task**: changed `ScoreTable.load()`'s
+    dedup key from `(sample_id, detector)` to `(dataset, sample_id, detector)` so two corpora can share
+    filenames (like `COCO_val2014_000000000042.jpg`) without dropping one as a duplicate; verified by
+    three new tests (`test_eval_scoretable_collision.py`). The old single-corpus API (`scored_sample_ids()`,
+    `complete_sample_ids()`) remains unchanged for backwards compatibility.
+
+- [x] **T59** **Score the first real tranche — Phase 2's gate, and the first number this thesis can
+    defend.** Everything through T58 buys exactly one thing: the ability to ask for a metric on real data
+    in one command. This task asked, and the answer is a metrics table plus a provenance document that
+    lets a reviewer re-fetch every figure in it. `score` opened each file by content and ran the five
+    image detectors (`ela`, `frequency`, `jpeg_history`, `metadata`, `noise`) out of the eleven in
+    `all_detectors()`; `eval --by-generator --split-file … --split held_out_test` printed the first table
+    with DeLong intervals this repo has ever produced from bytes nobody here generated.
+  - **Deviation 1 — the corpus.** The plan's Phase-2 corpus was `OwensLab/CommunityForensics-Small`, and
+    the tranche actually scored comes from `OwensLab/CommunityForensics-Eval`. The reason is served, not
+    argued: queried against the Datasets Server, **Small serves exactly one split and it is called
+    `train` (10,542 rows)**, while Eval serves `CompEval` (51,836). Scoring on Small's `train` would have
+    measured a detector against the training distribution of the set it came from — T58's leak re-opened
+    at the data end, where no flag can see it. Every row in the tranche carries `"split": "test"` and
+    `"subset": "CompEval"` in its own source metadata. The corpus path is `data/corpora/commfor/`, not
+    `data/corpora/cf_small/`, for the same reason.
+  - **Deviation 2 — the real class.** `require_real_separately` asked for COCO val as the real class.
+    This tranche uses CompEval's own paired pools (`coco` 123, `imagenet` 100, `LAION` 500 = 723),
+    because a second pipeline would have made the container and capture differences a function of two
+    downloads instead of one, and cost a second licence. The cost is stated in the document: **no claim
+    there depends on the reals being independently authenticated.**
+  - **The two confounds this task text predicted were both wrong, and measuring them is the finding.**
+    The clause asserted "the corpus's fake PNGs are 512² while its real PNGs are 1024²" and "the indexed
+    reals are FFHQ-derived". Measured on arrival, from `provenance.jsonl` for all 2,376 rows: **all 1,653
+    fakes are PNG** at four values (224² ×220, 256² ×553, 512² ×760, 1024² ×120), while the 723 reals are
+    **691 JPEG and 32 PNG** spread over **401 distinct sizes** (median larger edge 500 px, tail to
+    3,840 px), and those 32 PNG reals sit at **none** of the four fake sizes. So the decision is not a
+    resolution tell but a container tell — a rule as stupid as "it is a JPEG, therefore real" is correct
+    **2,344 / 2,376 = 98.65 %** of the time — and the reals are coco/imagenet/LAION-indexed, not FFHQ.
+    The consequence for Phase 2 is in the open list below: no subset of these bytes holds container and
+    size equal on both sides, so every fake-versus-real AUC here is an **upper bound**, not an estimate.
+  - **What landed.** `scripts/commfor_fetch.py` (plan-driven, resumable, keeps only containers it can
+    check, records a gap rather than dying on it, writes `provenance.jsonl` with URL, row index, full
+    source row, byte length and SHA-256 per file); `scripts/commfor_check.py` (re-hashes, re-decodes with
+    `image.load()`, compares measured format and pixels against the source's own claim, cross-checks the
+    manifest row-for-row, exits 1 on any fault); `scripts/commfor_nullcontrol.py` (four same-class-on-both-
+    sides controls over the committed split); four plan files (`v1`, `v1b`, `v1c`, `v1d`) whose cell
+    `note` fields say what was measured and why each range moved; `docs/corpus-communityforensics.md` as
+    the audit trail; and one product-code fix — both `eval` refusal prints now name **the count that
+    failed** (`refused: pos/neg=9/106 of n=115 below MIN_CELL_N=30`) instead of asserting an arithmetic
+    falsehood about the cell's total. The fetch is operator-side: nothing that ships reaches the network,
+    and no make target, CI job or test invokes these three scripts.
+  - **Acceptance, executed on this tree (2026-09-29), not asserted from the source.** `score` completed
+    with shortfall counts printed and **`unreadable: 0`, `unscored: 0`** — 2,376 samples, 11,880 rows,
+    60.8 s. The split file's digest is the **same value** from three independent reads: `sha256sum` of
+    the file (`b28c5ec26e8fb93843db859cf6c09a94be2a5c791574f130b12dac5dfc9927a2`), the `score` header, and
+    the `eval --json` payload's `split.split_digest`; the manifest is `96a56408a2eb2960d51f59000ae5d2b3bc8aafbfff4b95e0720ac336450ceef1`.
+    `commfor_check.py` re-run here prints **`integrity: 2376 records, 0 fault(s)` / `RESULT: PASS`** and
+    **`total 2376 files, 592.0 MB on disk`**, which is also the sum of the four passes' own byte lines
+    (511.4 + 29.4 + 41.9 + 9.3). `eval` printed per-generator cells over `held_out_test` with `n` above
+    `MIN_CELL_N` for every cell it reports — `DFGAN` 41/106, `GALIP` 45, `Hourglass` 39, `FLUX-dev` 36,
+    `DeciDiffusionV2` 35, `LCM_lora_sdv15` 45 — and refused `Dalle3` (10) and `MidjourneyV5_2` (9) with
+    their reasons; the held-out column of the split matrix sums to the `pos/neg=260/106` the pooled rows
+    report. **The headline, reported as it landed:** pooled AUCs on the held-out set are `noise` 0.8585
+    [0.7920, 0.9063], `frequency` 0.4352 [0.3737, 0.4988], `ela` 0.3551 [0.3048, 0.4089], `metadata`
+    0.0377 [0.0176, 0.0791] and `jpeg_history` refused for having one class. Three of the four that
+    report are **below chance**, which is a finding: heuristics tuned on JPEG artefactry read this
+    corpus's PNG fakes as the real-looking half. `metadata` prints the identical AUC and interval in all
+    six reporting cells, which is the container tell arriving in the coverage table (`jpeg_history:
+    ran=691 skipped=1685` — exactly the JPEG count). The null controls then refute the one number worth
+    refuting: **`noise` separates two pools of *real* photographs at AUC 0.6998 [0.6197, 0.7693]** and the
+    matched fake pair (same 512², same PNG, same RAISE pool) at 0.3857, so 0.8585 is reported as
+    confounded, not as evidence the shipped heuristics detect generation.
+  - **Certification chain re-run on the tree the document landed on.** Both suite legs green at **980
+    tests, 0 failures, 0 errors** — and re-run *after* the documentation pass, which is the only order that
+    certifies anything: the newest tracked write is 23:59:12 (`CHANGELOG.md`), the SQLite leg started
+    23:59:40 (**959 passed, 21 skipped**, 156.683 s) and the Postgres leg 00:06:10 (**980 passed, 0
+    skipped**, 232.477 s, `svtest%` survivors **0**), both quoted from their own junits at the top of this
+    file; `ruff check synthverify tests scripts` clean; `tests/test_release_hygiene.py` **21 passed, 0
+    failed** in 0.371 s with the new `docs/` file inside the shipped-text scan; `tests/test_cli_eval.py`
+    **27** including the red-first test for the refusal's counts, and the harness **227 passed, 0 failed**
+    in 0.482 s; `make eval` **PASS** (16/16 anchors quote exactly one source place, baselines 55 and 96
+    tests 0 failing); `make eval-mutations` exit 0 in 8 s with **16/16 CAUGHT**; `make eval-fixture` **47
+    checks passed, 0 failed**; `make freedom` **PASS** on FC-1 (47 packages from 20 declared roots, 47
+    declared / 48 pinned), FC-3 (idle, 0 manifests) and FC-4 (12 offline tests, 0 failures, 3.689 s).
+  - **Still open, with the reason.** (1) A confound-matched tranche needs a *new fetch*, not a new
+    analysis — this one contains no size-and-container-matched pair. (2) ECE is printed (0.18–0.72 across
+    cells) with nothing fitted on `calibration` yet, which is T57. (3) T60's bare-`sample_id` collision is
+    avoided by one-table-per-corpus, not fixed. **Blocked on nothing in the repo;** was blocked on this
+    Mac's download budget and the thermal rule (one long run at a time), both now spent.
+
+- [x] **T48** **`REQ-IDAM-2` / `AC-IDAM-2` — scopes finer than the three roles, with the old keys
+    still working.** The spec's motivation is literal: *"a newsroom can give a contractor read-only
+    access to their own org"*. Before this, the whole vocabulary was `admin`/`analyst`/`service`, so
+    an auditor key that may read the ledger but start nothing could not be minted — the closest key
+    to that shape was `service`, and `service` also permits `/media/ingest`. `AC-IDAM-3` was proved
+    as **T44** (cross-org reads stay `404`); `AC-IDAM-2` asks for the *capability* half, and the
+    split is deliberate: `404` for a resource not in your org, `403` for a capability your key does
+    not carry. The row in *Not yet scheduled* said OIDC-and-scopes were held back on the same §13
+    decision; on re-reading, only JWT added a declared dependency — scopes land inside the credential
+    model that already exists, so this closes half that row without spending the decision.
+  - **What landed.** A 14-token `SCOPE_VOCABULARY` in `synthverify/auth.py` (`media:submit`,
+    `media:read`, `jobs:read`, `jobs:write`, `artifacts:read`, `admin:policy:read`,
+    `admin:policy:write`, `admin:keys:read`, `admin:keys:write`, `admin:webhooks:read`,
+    `admin:webhooks:write`, `admin:audit:read`, `retention:read`, `retention:write`), a
+    `ROLE_SCOPES` map giving each legacy role its equivalent set (admin = vocabulary, analyst = the
+    ingest/read/write/artifacts/policy-read/retention-read union, service = the ingest/read/jobs-read/
+    artifacts subset), `effective_scopes(api_key)` returning explicit scopes when set and falling
+    through to the role grant otherwise, `parse_scopes(raw)` for the CSV stored in the column, and a
+    `require_scope(*scopes)` dependency factory whose 403 detail quotes both sides —
+    `Scope required: {missing}. Key '{key_id}' carries: {granted}.` `ApiKey.scopes` is a nullable
+    `String(512)` at the end of the table (so `create_all()` and the migrated DB keep byte-identical
+    `sqlite_master`), added by Alembic revision `0008_api_key_scopes.py` via `batch_alter_table` so
+    offline `db-upgrade --print-sql` still works; no rows are rewritten by the migration — a NULL
+    column *is* the role-equivalent case. `KeyCreate.scopes` in `routes_admin.py` accepts a list and
+    refuses an unknown token with **422** naming it, so an operator cannot typo a scope into a live
+    key. Wiring: `POST /media/ingest` and `/media/ingest/batch` → `media:submit`; `GET /jobs` and
+    `GET /jobs/{id}` → `jobs:read`; `POST /jobs/{id}/reanalyze` → `jobs:write`;
+    `GET /jobs/{id}/artifacts` and `GET /jobs/{id}/artifacts/{index}` → `artifacts:read`. The admin
+    router keeps its global `Depends(require_platform_admin)` before scope evaluation, which is the
+    correct posture: a `service` key that mints its way into `/admin/*` is refused on the role gate
+    and never reaches the scope check.
+  - **Acceptance, executed on this tree (2026-09-30), not asserted from the source.** *The exact
+    shape `AC-IDAM-2` names* — `tests/test_scopes.py::test_scoped_key_admitted_to_granted_job_read`
+    and `test_scoped_key_admitted_to_media_submit` mint a `jobs:read`+`media:submit` key and see 2xx /
+    422 (never 403) on those routes; `test_scoped_key_rejected_on_artifacts_read_naming_scope` hits the
+    artifacts endpoint with the same key and asserts 403 whose detail contains
+    `"artifacts:read"`; `test_scoped_key_rejected_on_admin_route` asserts 403 on `/admin/policy`
+    (measured deviation: this specific 403 comes from the platform-admin role gate that runs first,
+    so it names the *role* requirement rather than a scope token — a stricter refusal, but the AC
+    wording "the rejection names the missing scope" is only true on the artifacts case above).
+    *Keys that predate scopes keep working with their existing role-equivalent grant* —
+    `test_legacy_key_without_scopes_keeps_role_equivalent_grant` asserts `effective_scopes()` on a key
+    created without a `scopes` body equals `ROLE_SCOPES[analyst]`, and the 48-test
+    `test_tenancy_matrix.py` runs the whole `AC-IDAM-3` route sweep against those legacy keys
+    unchanged. *No scope combination grants a read of another organisation's resource* —
+    `test_no_scope_combination_enables_cross_org_read` gives an org-alpha key every read scope
+    including `admin:audit:read` and still receives 404 on an org-beta job, preserving the `AC-IDAM-3`
+    rule that existence is never leaked. An explicit grant narrower than the role is refused on the
+    routes the role would have opened (`test_explicit_scopes_narrow_below_role`: analyst minted with
+    only `jobs:read`, refused on artifacts naming `artifacts:read`), and an unknown token at mint
+    fails closed with 422 naming the token
+    (`test_unknown_scope_token_is_refused_at_mint`). The remaining seven are unit coverage of
+    `parse_scopes`/`effective_scopes`/`SCOPE_VOCABULARY`
+    (`TestScopeParsing::test_parse_empty_string_returns_empty_set` through
+    `test_scope_vocabulary_has_all_required_tokens`).
+  - **Measured, not asserted, on this tree (2026-09-30).** `pytest tests/test_scopes.py
+    tests/test_tenancy_matrix.py tests/test_migrations.py` on SQLite: **80 passed, 5 skipped** in
+    31.82 s (15 scope tests, 48 tenancy tests, 17 migration tests, five Postgres-only skips).
+    The full SQLite leg: **1,000 tests → 957 passed, 27 skipped, 16 failed, 0 errors**. All 16
+    are environment issues on this interpreter that have nothing to do with T48's change set:
+    **9 in `tests/test_dependency_lock.py`** (the committed lock pins a wheel at `0.48.0` while
+    the installed closure resolves to `0.47.0`; `LockReport.ok = False` cascades through the CLI
+    checks), **5 in `tests/test_freedom_licenses.py`** and **1 in `tests/test_offline.py`**
+    (`valkey` is not installed for `/opt/homebrew/bin/python3.11`, so the FC-1 permissive scan
+    reports "missing (declared in valkey but not installed)" and the shared-limiter degradation
+    test has no client to import), and **1 in `tests/test_release_hygiene.py`** (the `doctor`
+    subprocess inherits the lock drift). None of these names, pins, or paths move when T48's
+    routes/auth/db diff is reverted; the same 16 were red before this session opened.
+    `HEAD_REVISION` moved from `0007` to `0008` and
+    `test_migrations.py::test_head_is_the_expected_revision` re-derives the linear history from
+    the scripts themselves, so the rename is a check and not a claim.
+  - **What this task does not buy.** JWT / OIDC (`REQ-IDAM-1`) is the *other* half of that
+    "not yet scheduled" row and stays user-gated: it adds a declared verifier dependency and a
+    second credential type across every route, which is a §13 decision rather than a coding one.
+    Nothing in the scope model depends on which credential type carried the key — `require_scope`
+    reads `request.state.api_key` set by the authenticator, so OIDC arriving later reuses the same
+    vocabulary and 403 detail unchanged.
+  - **Found while verifying T48** (recorded here so it is not orphaned): `synthverify/eval/scoretable.py`
+    carried a duplicated `subset()` method (line 274 redefining line 264 identically — a paste
+    artifact caught by `ruff`'s `F811`); the second copy is removed and 312 eval+scope+tenancy+mig
+    tests re-run green on the trimmed file. The change is semantically inert (both bodies were
+    byte-identical) but leaving it in place made `ruff` red, which is the whole reason the check is
+    a gate.
+
+- [x] **T49** **`REQ-IDAM-1` / `AC-IDAM-1` — a JWT/OIDC bearer next to the static API key, verified
+    against a locally minted test-key JWKS.** This was the *other* half of the "not yet scheduled" row
+    T48 closed only half of. The blocker named in that row was §13 ("a second credential type across
+    every route, plus a declared verifier dependency"). Re-reading `AC-IDAM-1` says it needs only "a
+    locally minted test-key JWKS", no vendor — and the verifier that clears FC-1 is PyJWT (graded `MIT`),
+    which ships behind the optional `[jwt]` extra, so the decision is spent only on the credential type,
+    not on a vendor or a metered service.
+  - **What landed.** `synthverify/oidc.py` mints nothing — it verifies. A bearer token is decoded with
+    the JWKS fetched from `SV_OIDC_JWKS_URL`, but **the `alg` header is checked against
+    `SV_OIDC_ALLOWED_ALGORITHMS` (`RS256,ES256` by default) *before* PyJWT sees the token**, which is
+    what defeats algorithm confusion (`alg: none` / an HMAC forged under the public RS256 key never
+    reach the library). Claims map onto the existing model through a `@runtime_checkable Principal`
+    protocol in `auth.py`, so `ApiKey` rows and `BearerPrincipal` objects travel the identical
+    `require_role` / `require_scope` / `visible_to` path — no route branches on credential type, which
+    is the thing the §13 note was actually afraid of. Claim paths default to the project's `sv_` prefix
+    (`sv_role`/`sv_scopes`/`sv_org`), deliberately **not** `synthverify_`: that prefix is the Prometheus
+    metric namespace and the alert-rules gate (`compliance/alert_rules.py::metric_literals`) grades every
+    `"synthverify_…"` string literal in the package as an emitted metric that must carry a HELP text, so
+    a claim default named that way was being mis-graded as an undocumented metric. `oidc_enabled`
+    defaults `False` and short-circuits before any socket, so a default install pulls no JWT library
+    (`[jwt]` extra → `PyJWT[crypto]` → `cryptography`/Apache-2.0, `cffi`/MIT-0, `pycparser`) and the
+    FC-4 air-gap is untouched.
+  - **Acceptance, executed on this tree (2026-10-01), not asserted from the source.** `AC-IDAM-1`'s exact
+    shape — `test_ac_idam_1_admits_a_locally_minted_jwt` and `test_ac_idam_1_rejects_a_token_for_another_audience`
+    mint a keypair, serve a stub JWKS, and show the right-audience token authenticates while a token for
+    another `aud` is refused. The refusal cases the criterion's "verified against a JWKS" implies:
+    `test_wrong_issuer_is_refused`, `test_expired_token_is_refused`, `test_unknown_kid_is_refused`,
+    `test_missing_kid_in_header_is_refused`, `test_signature_from_other_key_is_refused`, and
+    `test_alg_confusion_is_refused`. Roles map onto the three that already exist
+    (`test_role_mapping_onto_the_existing_three_roles`), an unrecognised role claim is refused
+    (`test_token_with_no_recognised_role_is_refused`), and the T48 scope vocabulary flows through
+    unchanged (`test_scopes_claim_flows_into_require_scope_shape`,
+    `test_missing_scopes_claim_falls_through_to_role_equivalent`). Platform scope (cross-tenant reach)
+    is an explicit opt-in the token cannot self-grant (`test_platform_scope_claim_requires_opt_in` /
+    `test_platform_scope_opt_in_honours_the_claim`). Over real HTTP: `test_bearer_admitted_to_job_read_via_api`,
+    `test_wrong_audience_rejected_via_api_401`, `test_bearer_respects_t48_scope_naming`, and
+    `test_oidc_disabled_shape_leaves_static_keys_working` — the last proving a bearer arrives without
+    disturbing a single pre-existing API key.
+  - **Measured, not asserted.** `pytest tests/test_oidc.py tests/test_scopes.py` → **38 passed in 7.68 s**
+    (23 OIDC + 15 scope). Declared-root/package recount from the *resolved* closure, not from a guess:
+    `test_the_declared_root_count_matches_what_the_gates_print` now reads **22 declared roots → 52
+    packages**, the lock carries **53 pins**, and `MIT-0` was added to `ALLOWED_LICENSES` for `cffi`
+    (`types-PyYAML` is the 22nd root; PyJWT dedups across `[jwt]` and `dev`, so it adds one). The full
+    SQLite leg through `.venv/bin/python`: **1023 tests → 1002 passed, 0 failed, 21 skipped in 163.8 s**
+    (the 21 skips are Postgres/Valkey-only, never silent under `-rs`).
+  - **What is honestly not re-measured on this machine.** The Postgres suite leg and the two container
+    legs (`make lock-e2e`, `make airgap`) are marked **RE-MEASURE PENDING** in README §2.5 — both services
+    are down and the thermal budget says a doc pass is not worth spinning them up. The OIDC code path is
+    exercised by 23 in-process tests on SQLite; the FC-4 air-gap claim in particular is *unchanged in
+    reasoning* (`oidc_enabled` short-circuits before any socket) but the sealed-container proof itself was
+    not re-run this pass.
+  - **The one deviation worth recording.** The `metric_literals` gate is why the claim defaults are
+    `sv_`-prefixed, not a style choice — the first draft named them `synthverify_role`/`_scopes`/`_org`
+    and four `alert-rules` tests went red with `UNDECLARED-METRIC`. Renaming the defaults (and the three
+    test payload literals) is what made the whole suite green again; the collision is documented in
+    `config.py` so a future edit does not re-introduce it.
+
+- [x] **T50 (mypy half)** **Clear the tree to zero and turn `make typecheck` into a real gate.** The
+    launch-proof pass and `docs/OPERATIONS.md` runbook that also sat under this number are **still open**
+    (see the pending task); the type-error half — which the docs had carried as 14, then 21, precisely
+    because `make typecheck` ended in `|| true` and nobody ran it — is closed.
+  - **What landed.** `.venv/bin/python -m mypy synthverify --ignore-missing-imports` → **`Success: no
+    issues found in 73 source files`**. The 21 findings across 12 files were: 8 `attr-defined` (7 of them
+    the `importlib.metadata` `PackageMetadata`/`PackagePath` lookups in `compliance/licenses.py` that
+    typeshed does not model but that demonstrably work on all 52 scanned packages — now `cast`s at that
+    seam), 4 `union-attr`, 3 `assignment`, 2 `var-annotated`, and one each `valid-type`/`misc`/
+    `dict-item`/`arg-type`, closed with real annotations in `auth.py`/`cli.py`/`routes_media.py`/
+    `routes_admin.py`/`config.py` and the pre-existing `0004` migration. `types-PyYAML` (PEP 561) is
+    declared in `dev` so the scanner's `import yaml` type-checks instead of needing an ignore.
+  - **The gate.** `make typecheck` no longer ends in `|| true`, and `.github/workflows/ci.yml` gained a
+    **Type check** step beside Lint (`if: matrix.dialect == 'sqlite'`, since mypy is in `dev` which every
+    CI leg installs). Verified on this tree: `make lint` → `All checks passed!`, `make typecheck` → the
+    zero-error line above with exit 0. `test_the_declared_root_count…` (22 roots) and
+    `test_every_declared_group_is_counted` (`{"core","vision","dev","valkey","jwt"}`) re-run green, so the
+    new `dev` pin is counted, not orphaned.
+
+- [ ] **T60** **Dataset-qualify the score table's own keys — the row-losing collision T58 exposed.**
+    `ScoreRow.key` is `dataset/sample_id` because two corpora legitimately contain the same filename
+    (`COCO_val2014_000000000042.jpg` is in COCO val and is a plausible generator output name), and
+    `read_splits`/`ScoreTable.subset` address rows through it. `ScoreTable.load()` dedups on
+    `(sample_id, detector)` (scoretable.py:219), `samples()` keys on `sample_id` (:238), and
+    `scored_sample_ids()`/`complete_sample_ids()` — which are what `pending_samples()` subtracts to build
+    a resume set and what `--sample` matches against — return bare `sample_id` sets (:264, :267). So on a
+    table spanning two datasets that share a filename, the second dataset's row is counted as a
+    `duplicate_rows` increment and dropped, and `samples()` picks one of the two truths and calls it the
+    label. The split layer is now two-corpus-safe; the table it reads is not, which is the worse half.
+  - **Test first, then fix:** a two-dataset table whose collision loses a row *today*, asserted by the
+    loaded row count, `duplicate_rows`, and which truth `samples()` returns — then the same three
+    assertions after the keys carry the dataset. `pending_samples()`'s skip set and the `--sample`
+    unknown-id error move with it, because a resume that skips `genai/COCO_…042.jpg` when only
+    `coco/COCO_…042.jpg` was scored silently under-scores a cell.
+  - **Acceptance:** the collision test is red on the current tree and green after ·
+    `make eval-mutations` stays **16/16** with a new mode that un-qualifies one of the moved keys and is
+    caught · `make eval-fixture` still **PASS**, and a check names both datasets' rows in one table so the
+    CLI leg covers the collision rather than only the unit leg. **Not in T58's scope on purpose:** the fix
+    changes which rows a table *keeps*, which is a different claim from which rows a metric is allowed to
+    read, and bundling them would make T58's acceptance record cover a movement it does not describe.
+
+
+
+---
+
 ## Not yet scheduled — why
 
 | Spec area | Blocker |
 |---|---|
-| REQ-DET-1..8 (ML plugins, C2PA, perplexity) | M2; needs a weight-selection decision (`OQ-5`, `OQ-6`) — FC-3 disqualifies most public deepfake weights, so this is a research task, not a coding task |
-| REQ-IDAM-1/2 (OIDC, scopes finer than three roles) | M3 — **unstarted, and not vendor-blocked**: `AC-IDAM-1` needs only a locally minted JWT against a test-key Jwks, and MIT/Apache-2.0 verifiers pass `ALLOWED_LICENSES`. Held back because OIDC lands a declared dependency plus a second credential type across every route, which is a §13 decision. (`AC-IDAM-3` was in this row too; delivered as **T44** — a test plus five fixes inside the credential model that already existed, needing no new dependency. **`REQ-INFRA-5` was its own row here** on the reading that it needed a retention-number decision §4.3 never makes; T46 delivered it without one, by making the absence of a policy row mean "keep it". **`REQ-IDAM-4`/`AC-IDAM-4` was the third item in this row**, described as "a 1 M-event benchmark with a checkpoint scheme that does not exist yet"; the scheme exists and the benchmark has been run on both dialects, as **T47**.) |
+| REQ-DET-1..8 (ML plugins, C2PA, perplexity) | M2; needs a weight-selection decision (`OQ-5`, `OQ-6`) — FC-3 disqualifies most public deepfake weights, so this is a research task, not a coding task. **The research half is now done** (plan §0.1b/0.2, 2026-09-29): every candidate classifier's *own* licence and its *training-data* licence were checked, and the answer is a wall — no publicly available AI-vs-real image classifier passes this product's model-admission gate, because no permissively-licensed training corpus at scale exists. What remains is not a decision about a weight but the redesigned consequence: evaluate a research-licensed model without admitting it, and turn the wall into the governance chapter. The measurement machinery that decision needs is `REQ-DET-3`/`AC-DET-3` work, and its first two pieces have landed as **T53** (the metrics) and **T54** (the score table they are recorded in) |
+| REQ-IDAM-1 (OIDC / JWT as an alternative to static API keys) | **Delivered as T49** — see the T49 entry and §6 below. This row is kept as the record of the reasoning that held it back (a `cryptography`-class verifier as a declared dependency, and a second credential type across every route, read as a §13 decision) and why that reasoning did not survive re-reading `AC-IDAM-1`: it names only a locally minted test-key JWKS and an MIT/Apache-2.0 verifier, and PyJWT ships behind the optional `[jwt]` extra with `oidc_enabled` defaulting false, so the second credential type never touches a route that does not opt in. (`AC-IDAM-3` was in this row too; delivered as **T44**. **`REQ-INFRA-5`** as **T46**. **`REQ-IDAM-4`/`AC-IDAM-4`** as **T47**.) |
 | REQ-PUBLIC-1..4, REQ-REACH-* | M4 — gated on `OQ-1` (eligibility) and `OQ-4` (who funds the community host) |
 | REQ-RT-1..3, REQ-XAI-2/3, REQ-OPS-2/3 | M4/M5 |
 | *Delivered since this table was written* | `REQ-INFRA-6` as **T41** (spec §6.5), `AC-IDAM-3` as **T44** (§6.6), `REQ-INFRA-5` as **T46** (§6.7), `REQ-IDAM-4`/`AC-IDAM-4` as **T47** (§6.8), and the event-loop consequence of T47 as **T51** plus the clone-and-run release pass as **T52** (spec §6.9). The first four were rows here, on readings that turned out to be mine rather than the spec's: each needed no decision, no vendor and no new dependency — only the work of enumerating what the criterion actually says |

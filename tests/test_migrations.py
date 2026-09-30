@@ -61,7 +61,7 @@ requires_postgres = pytest.mark.skipif(
 #: including one whose schema nobody had compared to the models. Adding a revision therefore has
 #: to touch this line, which is the ceremony that makes landing a revision a decision rather than an
 #: accident.
-HEAD_REVISION = "0007"
+HEAD_REVISION = "0008"
 
 
 # --------------------------------------------------------------------- helpers

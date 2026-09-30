@@ -1,0 +1,12 @@
+[
+  {
+    "dir": "dfgan",
+    "kind": "fake",
+    "model_name": "DFGAN",
+    "generator": "DFGAN",
+    "take": 80,
+    "ranges": [[620, 400]],
+    "stop_after_misses": 120,
+    "note": "The v1c attempt at 44120 read the second DFGAN/coco block and found only reals in it, so the fakes were never fetched from there. The first pass took its 220 rows out of range [400,600] and stopped at row 619 with the range unspent, so it never looked past 619: this asks whether the same block continues. 80 rows moves DFGAN off the MIN_CELL_N boundary in held_out_test instead of leaving it exactly on it."
+  }
+]

@@ -135,7 +135,10 @@ def load_rules(path: Path) -> tuple[list[dict[str, Any]], list[RuleIssue]]:
     try:
         document = yaml.safe_load(path.read_text())
     except yaml.YAMLError as exc:  # the whole point of clause 2
-        location = f" (line {exc.problem_mark.line + 1}, column {exc.problem_mark.column + 1})" if isinstance(exc, yaml.MarkedYAMLError) else ""
+        # `MarkedYAMLError.problem_mark` is Optional per the stubs; a parser error with no mark
+        # is unusual but legal, so fall through to no location suffix rather than assume one.
+        mark = exc.problem_mark if isinstance(exc, yaml.MarkedYAMLError) else None
+        location = f" (line {mark.line + 1}, column {mark.column + 1})" if mark is not None else ""
         return [], [RuleIssue("unparseable", f"{path}: {type(exc).__name__}{location}: {exc}")]
     groups = (document or {}).get("groups")
     if not isinstance(groups, list) or not groups:

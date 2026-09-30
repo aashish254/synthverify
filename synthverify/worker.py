@@ -19,8 +19,10 @@ import os
 import socket
 import threading
 import time
+from typing import Any, cast
 
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 
 from synthverify.brokers.base import JobBroker, JobClaim
 from synthverify.brokers.factory import get_job_broker
@@ -314,8 +316,10 @@ def _write_outcome(session: Session, job_id: str, claim: JobClaim | None, values
     stmt = update(Job).where(Job.id == job_id)
     if claim is not None and claim.token is not None:
         stmt = stmt.where(Job.claim_token == claim.token)
-    result = session.execute(
-        stmt.values(**values, claim_token=None, lease_expires_at=None)
+    # A DML UPDATE always returns a CursorResult; Session.execute is only typed as Result.
+    result = cast(
+        CursorResult[Any],
+        session.execute(stmt.values(**values, claim_token=None, lease_expires_at=None)),
     )
     if result.rowcount == 1:
         return True

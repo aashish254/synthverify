@@ -1,0 +1,22 @@
+[
+  {
+    "dir": "lcm_lora_sdv15",
+    "kind": "fake",
+    "model_name": "LCM_lora_sdv15",
+    "generator": "LCM_lora_sdv15",
+    "take": 120,
+    "ranges": [[45320, 500]],
+    "stop_after_misses": 200,
+    "note": "Top-up before the split is committed, not a re-fetch of anything: the tranche's first read put this generator at 200 rows and the seed-20260929 bucketing landed only 20 of them in held_out_test, under MIN_CELL_N=30, which would have made a LatDiff cell a refusal for no reason but arithmetic. Starts at 45320 because 45000-45312 is already on disk (provenance row span) and the resume key is directory plus source row index."
+  },
+  {
+    "dir": "dfgan",
+    "kind": "fake",
+    "model_name": "DFGAN",
+    "generator": "DFGAN",
+    "take": 80,
+    "ranges": [[44120, 500]],
+    "stop_after_misses": 200,
+    "note": "Same reason: 220 rows put DFGAN at exactly 30 in held_out_test, which clears the gate on the boundary and carries the widest interval of any reported cell. The DFGAN/coco real pool was read at 44000-44119, so this asks whether that block's fakes follow it. If they do not, the 200-miss budget bounds what the question costs."
+  }
+]

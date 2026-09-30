@@ -1,4 +1,4 @@
-.PHONY: help setup doctor test test-fast lint typecheck run demo migrate licenses model-manifests freedom lock-check lock-e2e lock-mutations airgap postgres-e2e scale scale-images scale-mutations valkey-up valkey-down ratelimit ratelimit-mutations alerts trace trace-mutations tenancy tenancy-mutations retention retention-mutations ledger ledger-postgres ledger-mutations docker-build docker-up clean
+.PHONY: help setup doctor test test-fast lint typecheck eval eval-mutations eval-fixture run demo migrate licenses model-manifests freedom lock-check lock-e2e lock-mutations airgap postgres-e2e scale scale-images scale-mutations valkey-up valkey-down ratelimit ratelimit-mutations alerts trace trace-mutations tenancy tenancy-mutations retention retention-mutations ledger ledger-postgres ledger-mutations docker-build docker-up clean
 
 PY := ./.venv/bin/python
 # `-m pip`, not `./.venv/bin/pip`: the console shims in this venv do not resolve, and a gate
@@ -24,7 +24,7 @@ done)
 # environment again. `--system-site-packages` is deliberately absent: it lets a Homebrew-installed
 # `scipy` satisfy a pin the lock never described, so the env passes locally and the same command
 # fails on a clean machine.
-ALL_EXTRAS := vision,valkey,dev
+ALL_EXTRAS := vision,valkey,jwt,dev
 
 setup:            ## create a self-contained venv and install the locked closure, every extra
 	@if [ -z "$(PYTHON)" ]; then \
@@ -56,8 +56,35 @@ test-fast:        ## unit tests only (skip e2e markers)
 lint:             ## ruff lint - a real gate, no swallowed exit code
 	$(PY) -m ruff check synthverify tests scripts
 
-typecheck:        ## mypy (informational)
-	$(PY) -m mypy synthverify --ignore-missing-imports || true
+typecheck:        ## mypy - a real gate now that the tree is at zero
+	$(PY) -m mypy synthverify --ignore-missing-imports
+
+eval:             ## the evaluator, evaluated: both suites against an unmutated shadow copy, after their anchors are checked
+	$(PY) scripts/metrics_e2e.py --check-anchors
+	$(PY) scripts/metrics_e2e.py
+
+eval-mutations:   ## the sixteen ways a headline number can be quietly wrong - eleven in the metric, five in the read - each caught
+	$(PY) scripts/metrics_e2e.py --check-anchors
+	$(PY) scripts/metrics_e2e.py
+	$(PY) scripts/metrics_e2e.py --mutate auc-sign-inverted --expect-fail --skip-baseline || { echo "mutation A (auc-sign-inverted) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate auc-ties-full-credit --expect-fail --skip-baseline || { echo "mutation B (auc-ties-full-credit) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate delong-ties-full-credit --expect-fail --skip-baseline || { echo "mutation C (delong-ties-full-credit) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate delong-clamped-normal-ci --expect-fail --skip-baseline || { echo "mutation D (delong-clamped-normal-ci) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate confusion-threshold-exclusive --expect-fail --skip-baseline || { echo "mutation E (confusion-threshold-exclusive) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate eer-jumps-instead-of-interpolating --expect-fail --skip-baseline || { echo "mutation F (eer-jumps-instead-of-interpolating) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate ece-decision-convention --expect-fail --skip-baseline || { echo "mutation G (ece-decision-convention) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate reliability-equal-width-bins --expect-fail --skip-baseline || { echo "mutation H (reliability-equal-width-bins) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate bootstrap-median-lower-bound --expect-fail --skip-baseline || { echo "mutation I (bootstrap-median-lower-bound) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate operating-point-ignores-the-cap --expect-fail --skip-baseline || { echo "mutation J (operating-point-ignores-the-cap) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate ap-rank-not-threshold --expect-fail --skip-baseline || { echo "mutation K (ap-rank-not-threshold) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate split-filter-ignored --expect-fail --skip-baseline || { echo "mutation L (split-filter-ignored) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate label-cross-check-dropped --expect-fail --skip-baseline || { echo "mutation M (label-cross-check-dropped) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate subset-returns-everything --expect-fail --skip-baseline || { echo "mutation N (subset-returns-everything) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate empty-selection-quietly-succeeds --expect-fail --skip-baseline || { echo "mutation O (empty-selection-quietly-succeeds) was NOT caught"; exit 1; }
+	$(PY) scripts/metrics_e2e.py --mutate unfiltered-read-undeclared --expect-fail --skip-baseline || { echo "mutation P (unfiltered-read-undeclared) was NOT caught"; exit 1; }
+
+eval-fixture:     ## the whole measurement chain over a generated fixture corpus: score --dry-run, score, resume, eval --by-generator --split-file
+	$(PY) scripts/eval_fixture_e2e.py
 
 licenses:         ## FC-1 gate: every dependency permissively licensed, data included
 	$(PY) -m synthverify.cli licenses

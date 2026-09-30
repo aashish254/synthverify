@@ -50,6 +50,11 @@ ALLOWED_LICENSES: frozenset[str] = frozenset(
     {
         "MIT",
         "MIT-CMU",
+        # MIT-0 is "MIT No Attribution" - MIT minus the copyright-retention clause, so
+        # a stricter grant of the same shape. It arrives in the transitive closure of
+        # T49's optional `PyJWT[crypto]` extra (via cffi), and adding it here is the
+        # honest classification rather than a widening: no non-permissive grant slips in.
+        "MIT-0",
         "Apache-2.0",
         "BSD-2-Clause",
         "BSD-3-Clause",
@@ -465,7 +470,7 @@ def _license_files(dist: Distribution) -> list[str]:
         if len(parts) > 3 or not _LICENSE_FILE_RE.match(parts[-1]):
             continue
         try:
-            raw = entry.read_bytes()
+            raw = entry.read_bytes()  # type: ignore[attr-defined]  # PackagePath is a pathlib.Path at runtime; typeshed stubs read_bytes only for 3.13+
         except (OSError, AttributeError):
             # AttributeError: PackagePath is a pathlib.Path in 3.11+, but the
             # metadata spec allows richer adapters; a file we cannot open is
@@ -479,13 +484,13 @@ def _license_files(dist: Distribution) -> list[str]:
 
 def resolve_dist_license(dist: Distribution) -> tuple[LicenseStatus, str | None, str, str]:
     """Return ``(status, license_id, evidence, note)`` for one distribution."""
-    expression = dist.metadata.get("License-Expression")
+    expression = dist.metadata.get("License-Expression")  # type: ignore[attr-defined]  # .get is stubbed only for 3.12+; runtime class is email.message.Message
     if expression:
         status, canonical = classify_expression(expression)
         return status, canonical, "License-Expression", _status_note(status, canonical)
 
     classifiers = [
-        value for key, value in dist.metadata.items() if key == "Classifier" and value.startswith("License ::")
+        value for key, value in dist.metadata.items() if key == "Classifier" and value.startswith("License ::")  # type: ignore[attr-defined]  # items() absent from the Protocol stub; runtime class is email.message.Message
     ]
     if any(c.startswith("License :: Other/Proprietary") or "Non-FOSS" in c for c in classifiers):
         return LicenseStatus.FORBIDDEN, "Proprietary", "classifier", "classifier declares a non-open licence"
@@ -495,7 +500,7 @@ def resolve_dist_license(dist: Distribution) -> tuple[LicenseStatus, str | None,
         if status is not LicenseStatus.UNKNOWN:
             return status, canonical, "classifier", _status_note(status, canonical)
 
-    field_value = (dist.metadata.get("License") or "").strip()
+    field_value = (dist.metadata.get("License") or "").strip()  # type: ignore[attr-defined]  # .get is stubbed only for 3.12+; runtime class is email.message.Message
     if field_value:
         if len(field_value) <= _SHORT_FIELD_MAX and "\n" not in field_value:
             status, canonical = classify_expression(field_value)
@@ -537,7 +542,7 @@ def installed_distributions() -> dict[str, list[Distribution]]:
     """
     index: dict[str, list[Distribution]] = {}
     for dist in distributions():
-        name = dist.metadata.get("Name")
+        name = dist.metadata.get("Name")  # type: ignore[attr-defined]  # .get is stubbed only for 3.12+; runtime class is email.message.Message
         if not name:
             continue
         index.setdefault(_normalise(name), [dist])
@@ -688,7 +693,7 @@ def dependency_closure(
             continue  # the caller reports declared-but-missing packages
         scope[key] = parent
         for dist in dists:
-            dist_name = dist.metadata.get("Name") or key
+            dist_name = dist.metadata.get("Name") or key  # type: ignore[attr-defined]  # .get is stubbed only for 3.12+; runtime class is email.message.Message
             for spec in dist.metadata.get_all("Requires-Dist") or []:
                 extra = gated_on_extra(spec)
                 if extra is not None and extra not in requested_extras.get(key, set()):
@@ -734,7 +739,7 @@ def scan_declared_dependencies(
             status, license_id, evidence, note = resolve_dist_license(dist)
             findings.append(
                 LicenseFinding(
-                    name=dist.metadata.get("Name") or key,
+                    name=dist.metadata.get("Name") or key,  # type: ignore[attr-defined]  # .get is stubbed only for 3.12+; runtime class is email.message.Message
                     version=dist.version or "unknown",
                     license_id=license_id,
                     status=status,

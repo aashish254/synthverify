@@ -58,7 +58,10 @@ def _indexes(table: str) -> set[str]:
     bind = op.get_bind()
     if table not in sa.inspect(bind).get_table_names():
         return set()
-    return {idx["name"] for idx in sa.inspect(bind).get_indexes(table)}
+    # SQLAlchemy's Row type names `name: str | None` because a reflected index can theoretically
+    # be nameless; every index we actually compare against has one, and callers check membership,
+    # so dropping the None keeps the return type honest (`set[str]`) without a cast.
+    return {idx["name"] for idx in sa.inspect(bind).get_indexes(table) if idx["name"] is not None}
 
 
 def upgrade() -> None:

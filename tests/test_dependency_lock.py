@@ -82,8 +82,12 @@ class TestClosureVersions:
     def test_every_declared_group_is_counted(self):
         """The answer to "did this check see the extra I just added?" has to be printed."""
         _, groups = closure_versions(REPO_ROOT)
-        assert {"core", "vision", "dev", "valkey"} == set(groups)
+        assert {"core", "vision", "dev", "valkey", "jwt"} == set(groups)
         assert groups["vision"] >= 2
+        # `jwt` exists so the OIDC bearer path (REQ-IDAM-1 / AC-IDAM-1) can be graded offline;
+        # its closure is small (PyJWT + the cryptography it pulls), so a lower bound still catches
+        # the extra silently dropping out of the walk.
+        assert groups["jwt"] >= 1
 
     def test_the_build_backend_requirements_end_up_locked(self):
         """`[build-system] requires` is not a project dependency, so the closure walk never sees

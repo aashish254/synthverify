@@ -62,6 +62,13 @@ jobs:
       - name: Lint
         if: matrix.dialect == 'sqlite'
         run: ruff check synthverify tests scripts
+      - name: Type check
+        if: matrix.dialect == 'sqlite'
+        # mypy is a real gate now, not informational: the tree is at zero errors and this
+        # step is what keeps it there. `--ignore-missing-imports` because the optional extras
+        # (vision/valkey/jwt) are installed here, but the point is to catch a regression in
+        # synthverify's own annotations, which is why it runs on one dialect only.
+        run: mypy synthverify --ignore-missing-imports
       - name: The shared limiter has somewhere to live
         # Without this, an absent valkey service would turn five real tests into five quiet
         # skips on both legs, and AC-INFRA-3 would be reported as covered by a suite that
@@ -213,6 +220,78 @@ jobs:
           name: freedom-report
           path: freedom-report.json
           if-no-files-found: ignore
+
+  evaluation:
+    # The measurement half of the thesis has one guarantee it can have before any dataset is
+    # downloaded: a wrong number has to fail a test - and so does a right number read from the wrong
+    # rows. The mutations run once per way a headline number can be quietly wrong - sixteen of them.
+    # Eleven are in the arithmetic (inverted AUC, ties credited twice, DeLong off the Mann-Whitney
+    # identity, a clamped normal interval where a logit one is claimed, an exclusive decision
+    # threshold, an EER read off the far side of a jump, ECE switched to the decision convention,
+    # equal-width calibration bins, a percentile interval whose lower arm is the median, an operating
+    # point that ignores its own FPR cap, and average precision credited by row rank rather than at its
+    # threshold). Five are in the read a metric is computed from (a `--split-file` filter that sees
+    # every row, the label cross-check against the committed split removed, a filtered view that
+    # ignores its key set, an empty selection that exits 0, and an unfiltered default that never says
+    # it filtered nothing) - the leak that would have put `train` inside a held-out table.
+    # Each has to be *caught*, and the anchor check that precedes them is what stops a mutation going
+    # stale. A seventeenth leg needs no mutation at all:
+    # `scripts/eval_fixture_e2e.py` drives the CLI over a corpus of generated PNGs and asserts the
+    # chain end to end - the dry run commits nothing, the real run prints the SHA-256 of the artefacts
+    # it wrote, the resume writes zero rows, `eval` refuses a twelve-sample cell, and a split-scoped
+    # read is checked against the assignment that defined it.
+    # No service, no container, no torch - the cheapest job here on purpose. The image detectors are
+    # NumPy-only by design, so the fixture leg decodes real PNGs from a core + dev install; the paths
+    # that degrade without opencv/scipy are not what this job checks.
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install the package (core + dev; `synthverify/eval` imports numpy and nothing else)
+        run: pip install -c docker/requirements-lock.txt -e ".[dev]"
+      - name: Anchors - every mutation still quotes exactly one place in the source
+        run: python scripts/metrics_e2e.py --check-anchors
+      - name: Baseline - the metrics and split-read suites green against an unmutated shadow copy
+        run: python scripts/metrics_e2e.py
+      - name: Mutation - an inverted AUC must not read as the best detector in the table
+        run: python scripts/metrics_e2e.py --mutate auc-sign-inverted --expect-fail --skip-baseline
+      - name: Mutation - a constant score must not beat chance
+        run: python scripts/metrics_e2e.py --mutate auc-ties-full-credit --expect-fail --skip-baseline
+      - name: Mutation - DeLong must stay equal to the Mann-Whitney AUC under ties
+        run: python scripts/metrics_e2e.py --mutate delong-ties-full-credit --expect-fail --skip-baseline
+      - name: Mutation - a 20-sample AUC must not publish an interval that reaches certainty
+        run: python scripts/metrics_e2e.py --mutate delong-clamped-normal-ci --expect-fail --skip-baseline
+      - name: Mutation - a score landing on the threshold must count as flagged
+        run: python scripts/metrics_e2e.py --mutate confusion-threshold-exclusive --expect-fail --skip-baseline
+      - name: Mutation - an EER between two operating points must be interpolated
+        run: python scripts/metrics_e2e.py --mutate eer-jumps-instead-of-interpolating --expect-fail --skip-baseline
+      - name: Mutation - ECE must not switch to the decision-based convention
+        run: python scripts/metrics_e2e.py --mutate ece-decision-convention --expect-fail --skip-baseline
+      - name: Mutation - calibration bins must stay equal-mass
+        run: python scripts/metrics_e2e.py --mutate reliability-equal-width-bins --expect-fail --skip-baseline
+      - name: Mutation - a 95 % interval must not start at the median
+        run: python scripts/metrics_e2e.py --mutate bootstrap-median-lower-bound --expect-fail --skip-baseline
+      - name: Mutation - an operating point must honour the FPR cap it was given
+        run: python scripts/metrics_e2e.py --mutate operating-point-ignores-the-cap --expect-fail --skip-baseline
+      - name: Mutation - average precision must be credited at its threshold, not at its row rank
+        run: python scripts/metrics_e2e.py --mutate ap-rank-not-threshold --expect-fail --skip-baseline
+      - name: Mutation - a split-scoped read must not be able to quietly read the whole table
+        run: python scripts/metrics_e2e.py --mutate split-filter-ignored --expect-fail --skip-baseline
+      - name: Mutation - a truth cell edited in the score table must be caught by the split file
+        run: python scripts/metrics_e2e.py --mutate label-cross-check-dropped --expect-fail --skip-baseline
+      - name: Mutation - the filtered view must hold only the rows it was given
+        run: python scripts/metrics_e2e.py --mutate subset-returns-everything --expect-fail --skip-baseline
+      - name: Mutation - an empty selection must refuse rather than report nothing
+        run: python scripts/metrics_e2e.py --mutate empty-selection-quietly-succeeds --expect-fail --skip-baseline
+      - name: Mutation - the unfiltered default has to say that it filtered nothing
+        run: python scripts/metrics_e2e.py --mutate unfiltered-read-undeclared --expect-fail --skip-baseline
+      - name: Fixture corpus - score, resume, and eval one named split over a generated corpus
+        run: python scripts/eval_fixture_e2e.py
 
   migrations:
     # The half of AC-INFRA-1 that a test suite cannot assert: the *shipped product*

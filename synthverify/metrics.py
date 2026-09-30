@@ -20,6 +20,7 @@ an exception, and a silently-vanishing label is a bad place to debug from - so t
 
 from __future__ import annotations
 
+import builtins
 import threading
 import time
 from dataclasses import dataclass, field
@@ -161,7 +162,8 @@ class MetricsRegistry:
 
     # --------------------------------------------------------------- rendering
 
-    def names(self) -> set[str]:
+    # ``set[str]`` here would resolve to the ``set`` method above, so the builtin is named explicitly.
+    def names(self) -> builtins.set[str]:
         """Every metric this process has recorded - what the alert rules are cross-checked against."""
         with self._lock:
             return set(self._metrics)

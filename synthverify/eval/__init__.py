@@ -1,0 +1,116 @@
+"""Measurement half of the product: what this pipeline actually detects, on data it did not write.
+
+Exists because `goal-spec.md` `REQ-DET-3` demands measured AUC/EER/ECE on a held-out set and
+`AC-DET-1b` says the self-generated fixture corpus is not admissible evidence for it. Nothing here
+decodes an image: the corpus layer names samples and their labels, the split decides which of them
+may inform a decision, the score table records what a detector said about each one, and the metrics
+turn those records into numbers carrying the sample counts and confidence intervals that make a
+number arguable. A thesis has to be able to say where each figure came from, so all four are files
+on disk rather than in-memory intermediates.
+"""
+
+from synthverify.eval.datasets import (
+    CORPORA,
+    Corpus,
+    CorpusError,
+    LabeledSample,
+    Sample,
+    iter_batches,
+    label_by_name,
+    manifest_digest,
+    read_manifest,
+    scan_by_generator,
+    scan_flat,
+    write_manifest,
+)
+from synthverify.eval.metrics import (
+    MIN_CELL_N,
+    Bin,
+    BinaryMetrics,
+    Confusion,
+    InsufficientLabelsError,
+    Interval,
+    RocPoint,
+    ap,
+    auc,
+    auc_delong_ci,
+    bootstrap_ci,
+    confusion_at,
+    delong_auc,
+    ece,
+    ece_from_curve,
+    eer,
+    evaluate,
+    evaluate_by_group,
+    fpr_at_fnr,
+    operating_point,
+    per_group_entries,
+    reliability_curve,
+    roc_curve,
+)
+from synthverify.eval.scoretable import (
+    SampleTruth,
+    ScoreRow,
+    ScoreTable,
+    ScoreTableError,
+    ScoreWriter,
+    row_from_result,
+)
+from synthverify.eval.split import (
+    DEFAULT_PROPORTIONS,
+    SPLITS,
+    SplitAssignment,
+    SplitError,
+    bucket_of,
+    position_of,
+)
+
+__all__ = [
+    "CORPORA",
+    "DEFAULT_PROPORTIONS",
+    "MIN_CELL_N",
+    "SPLITS",
+    "BinaryMetrics",
+    "Bin",
+    "Confusion",
+    "Corpus",
+    "CorpusError",
+    "InsufficientLabelsError",
+    "Interval",
+    "LabeledSample",
+    "RocPoint",
+    "Sample",
+    "SampleTruth",
+    "ScoreRow",
+    "ScoreTable",
+    "ScoreTableError",
+    "ScoreWriter",
+    "SplitAssignment",
+    "SplitError",
+    "ap",
+    "auc",
+    "auc_delong_ci",
+    "bootstrap_ci",
+    "bucket_of",
+    "confusion_at",
+    "delong_auc",
+    "ece",
+    "ece_from_curve",
+    "eer",
+    "evaluate",
+    "evaluate_by_group",
+    "fpr_at_fnr",
+    "iter_batches",
+    "label_by_name",
+    "manifest_digest",
+    "operating_point",
+    "per_group_entries",
+    "position_of",
+    "read_manifest",
+    "reliability_curve",
+    "roc_curve",
+    "row_from_result",
+    "scan_by_generator",
+    "scan_flat",
+    "write_manifest",
+]

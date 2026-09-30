@@ -1,0 +1,23 @@
+[
+  {
+    "dir": "real",
+    "kind": "real",
+    "model_name": "DFGAN",
+    "generator": "real",
+    "take": 120,
+    "ranges": [[44000, 700]],
+    "stop_after_misses": 200,
+    "note": "Second pass at the DFGAN/coco real pool. The first plan fetched it from row 0, where the block is only 28 rows deep before the DFGAN fakes begin, so the 25-consecutive-miss stop fired and 3 of 120 landed. The locator read the same pool at 44000-44500. The miss budget is raised to 200 because a source's reals and fakes sit in alternating runs inside one block, and a 90-row run of the wrong label is normal, not the end of the block."
+  },
+  {
+    "dir": "hourglass",
+    "kind": "fake",
+    "model_name": "Hourglass",
+    "generator": "Hourglass",
+    "take": 220,
+    "ranges": [[19150, 700]],
+    "require": { "real_source": "imagenet" },
+    "stop_after_misses": 200,
+    "note": "Completes the PixDiff class, which the tranche otherwise has 33 rows of. The stride-25 locator over 18900-19800 read Hourglass/imagenet fakes (PNG 256x256) at 18950-19049, their paired ImageNet reals (JPEG 500-wide) at 19050-19140, and fakes again to 19760, so this starts after the real run instead of inside it. The 33 rows already on disk are not re-requested: the resume key is the directory and the source row index."
+  }
+]

@@ -78,11 +78,29 @@ vision = ["opencv-python>=4.8", "scipy>=1.10"]
 # a single graded package. The server it talks to is Valkey (BSD-3) - never Redis >= 7.4, whose
 # RSALv2/SSPL tri-licence FC-1 forbids. The default install stays client-free without this extra.
 valkey = ["valkey>=6.0,<7"]
+# REQ-IDAM-1: the bearer-credential verifier. PyJWT is MIT and its `[crypto]` extra pulls
+# `cryptography` (Apache-2.0 OR BSD-3-Clause, dual-licensed) - both on the FC-1 allowlist.
+# Kept as an extra so an install that never opts into OIDC ships zero new runtime code, and
+# the air-gap FC-4 leg keeps its 20-root closure. Operators turn it on with `pip install
+# "synthverify[jwt]"` and set SV_OIDC_ENABLED=true.
+jwt = ["PyJWT[crypto]>=2.8,<3"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.4",
     "mypy>=1.9",
+    # mypy needs PEP 561 markers to type-check `import yaml` in the alert-rules scanner. PyYAML
+    # ships no inline types, and the stub package is Apache-2.0/BSD/MIT triple-licensed (all on
+    # the FC-1 allow-list). This is a *type-check* dependency, not a runtime one, so it lives in
+    # `dev` only; the shipped image never installs it.
+    "types-PyYAML>=6.0",
+    # T49 (REQ-IDAM-1) has to run under CI, so the bearer verifier is in the contributor /
+    # CI environment. Both packages are FC-1 allow-listed: PyJWT is MIT and `cryptography` is
+    # dual-licensed Apache-2.0 OR BSD-3-Clause. The core runtime install shape is unaffected -
+    # the same code path stays import-guarded behind `oidc_enabled`, so a `pip install
+    # synthverify` (no extras) never pulls either one and the air-gap FC-4 closure stays at
+    # its 20-root figure.
+    "PyJWT[crypto]>=2.8,<3",
     # FC-1 covers build-time dependencies ("Every runtime and build-time dependency", goal-spec §4),
     # and it grades offline, from installed metadata. A PEP 517 isolated build never leaves
     # `setuptools`/`wheel` in the *target* environment, so declaring them here is what makes the
@@ -120,6 +138,7 @@ markers = [
     "e2e: end-to-end workflow tests",
     "slow: longer running detector tests",
     "offline: FC-4 proof that the path runs with outbound sockets blocked",
+    "calibration: AC-DET-3 gate comparing measured metrics against committed manifest floors",
 ]
 asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning"]

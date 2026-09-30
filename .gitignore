@@ -13,3 +13,5 @@ data/bootstrap_admin_key.txt
 dist/
 build/
 *.egg-info/
+# Third-party research corpora are never committed: CC BY-NC-SA / research-only images stay local.
+data/corpora/

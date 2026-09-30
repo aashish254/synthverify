@@ -1,0 +1,124 @@
+[
+  {
+    "dir": "real",
+    "kind": "real",
+    "model_name": "DFGAN",
+    "take": 120,
+    "ranges": [[0, 360]],
+    "note": "COCO-derived reals that open the DFGAN block; source real_source=coco, JPEG, mixed 480x640-class"
+  },
+  {
+    "dir": "dfgan",
+    "kind": "fake",
+    "model_name": "DFGAN",
+    "generator": "DFGAN",
+    "take": 220,
+    "ranges": [[400, 600]],
+    "note": "GAN family, 256x256 PNG; starts at the first row verified as DFGAN/label 1"
+  },
+  {
+    "dir": "real",
+    "kind": "real",
+    "model_name": "Hourglass",
+    "take": 120,
+    "ranges": [[10000, 900]],
+    "require": { "real_source": "imagenet" },
+    "note": "ImageNet-derived reals paired with the PixDiff Hourglass block, JPEG, mixed 500x459-class"
+  },
+  {
+    "dir": "galip",
+    "kind": "fake",
+    "model_name": "GALIP",
+    "generator": "GALIP",
+    "take": 220,
+    "ranges": [[5750, 250], [14900, 1000]],
+    "note": "GAN family at 224x224 PNG, RAISE-paired -- the cheapest pixels in the set; two verified blocks"
+  },
+  {
+    "dir": "hourglass",
+    "kind": "fake",
+    "model_name": "Hourglass",
+    "generator": "Hourglass",
+    "take": 220,
+    "ranges": [[19000, 1000]],
+    "require": { "real_source": "imagenet" },
+    "note": "PixDiff family at 256x256 PNG. The ffhq-paired Hourglass fakes are 1024x1024 and are excluded by the require, so this cell is one source and one resolution"
+  },
+  {
+    "dir": "real",
+    "kind": "real",
+    "model_name": "FLUX-dev",
+    "take": 120,
+    "ranges": [[16000, 900]],
+    "note": "LAION-derived reals, JPEG, 8-50 KB, paired with the FLUX-dev block"
+  },
+  {
+    "dir": "flux_dev",
+    "kind": "fake",
+    "model_name": "FLUX-dev",
+    "generator": "FLUX-dev",
+    "take": 220,
+    "ranges": [[37000, 900]],
+    "note": "Commercial family at 512x512 PNG, LAION-paired"
+  },
+  {
+    "dir": "decidiffusionv2",
+    "kind": "fake",
+    "model_name": "DeciDiffusionV2",
+    "generator": "DeciDiffusionV2",
+    "take": 220,
+    "ranges": [[39000, 1000]],
+    "note": "LatDiff family at 512x512 PNG, RAISE-paired"
+  },
+  {
+    "dir": "lcm_lora_sdv15",
+    "kind": "fake",
+    "model_name": "LCM_lora_sdv15",
+    "generator": "LCM_lora_sdv15",
+    "take": 200,
+    "ranges": [[45000, 900]],
+    "note": "LatDiff family: an LCM LoRA over Stable Diffusion v1.5 at 512x512 PNG, RAISE-paired"
+  },
+  {
+    "dir": "real",
+    "kind": "real",
+    "model_name": "MidjourneyV5_2",
+    "take": 140,
+    "ranges": [[36000, 700]],
+    "note": "LAION-derived reals paired with the Midjourney V5.2 block; small JPEGs, mixed aspect"
+  },
+  {
+    "dir": "real",
+    "kind": "real",
+    "model_name": "Dalle2",
+    "take": 120,
+    "ranges": [[43000, 900]],
+    "note": "LAION-derived reals paired with the DALL-E 2 block; includes 80x80 thumbnails, which is a real property of the pool"
+  },
+  {
+    "dir": "real",
+    "kind": "real",
+    "model_name": "Firefly_Image3",
+    "take": 120,
+    "ranges": [[25000, 900]],
+    "note": "LAION-derived reals paired with the Adobe Firefly Image 3 block"
+  },
+  {
+    "dir": "midjourneyv5_2",
+    "kind": "fake",
+    "model_name": "MidjourneyV5_2",
+    "generator": "MidjourneyV5_2",
+    "take": 60,
+    "ranges": [[3000, 700]],
+    "note": "Commercial family, 1024x1024 PNG at ~1.6 MB each. Thin on purpose: at 60 rows its held_out_test cell is ~9 and the harness will refuse to print a number for it. It buys a pooled observation of a high-resolution commercial generator without buying a publishable per-generator one."
+  },
+  {
+    "dir": "dalle3",
+    "kind": "fake",
+    "model_name": "Dalle3",
+    "generator": "Dalle3",
+    "take": 60,
+    "ranges": [[28000, 700]],
+    "note": "Commercial family, 1024x1024 PNG at ~2 MB each; thin for the same reason and listed last so the byte limit spends itself on the publishable cells first."
+  }
+]

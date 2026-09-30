@@ -10,17 +10,334 @@ says which.
 
 ## [Unreleased]
 
-Nothing is queued ahead of `1.0.1` *for this release*: the requirement work through `1.0.0` is done, and what
-remains below is open work, not a gate this version has skipped. The open items are tracked in
-[`docs/goal-spec.md`](docs/goal-spec.md) §9 and in `TODO.md`:
+No *release-blocking* work is queued ahead of `1.0.1`: the requirements through `1.0.0` are done, and
+what remains below is open work, not a gate this version has skipped. That sentence's scope has since
+moved — the thesis tranche has started adding `REQ-DET-3`'s measurement machinery, which is *new*
+requirement work rather than a gate 1.0.0 skipped, and it is the first entry under **Added**. The open
+items are tracked in [`docs/goal-spec.md`](docs/goal-spec.md) §9 and in `TODO.md`:
 
 - `REQ-IDAM-2` — scope-granted credentials (`jobs:read`, `media:submit`, …) alongside roles, with a
-  scope-matrix test (`TODO.md` T48).
+  scope-matrix test. **Delivered as T48** — see **Added** below.
 - `REQ-IDAM-1` — JWT / OIDC subject tokens. This adds the first new runtime dependency since the licence gate
-  was written, so it is an FC-1 decision as well as a feature (`TODO.md` T49).
-- `TODO.md` **T50** — a launch-proof pass and a `docs/OPERATIONS.md` runbook. It also owns the 21 informational
-  mypy findings, which gate nothing today because `make typecheck` ends in `|| true`.
+  was written, so it is an FC-1 decision as well as a feature. **Delivered as T49** — see **Added** below.
+- `TODO.md` **T50** — the mypy half is **done**: the tree is at zero and `make typecheck` is now a gate (see
+  **Added**). What remains under this number is the launch-proof pass and a `docs/OPERATIONS.md` runbook.
+- `TODO.md` **T57** — the `calibration` marker comparing measured metrics against the committed manifest gates.
+  It was queued behind **T59** because a gate needs a number to gate, and **T59** has now printed **28** of them
+  on `commfor_eval_v1` (four detectors, each as a pooled held-out cell plus six reporting generator cells, with
+  nine refusals beside them) and left **461** `calibration` rows in the committed split that nothing reads yet.
+- `TODO.md` **T60** — a live row-losing collision: `ScoreTable.load()`, `samples()`, `scored_sample_ids()` and
+  the runner's resume set key on bare `sample_id`, while the split layer now keys on `dataset/sample_id`. Two
+  corpora sharing a filename drop a row and call it a duplicate.
 - `OQ-1` … `OQ-6` — open questions that are operator weightings, not code.
+
+### Added
+
+- **`synthverify/eval/` — the measurement half of the product.** AUC (Mann-Whitney, ties at half credit
+  so a constant detector scores *exactly* chance), DeLong's interval computed in O(n log n) with
+  `searchsorted` and published on the logit scale, interpolated EER, average precision kept distinct
+  from AUC, equal-mass reliability bins with ECE defined as calibration-in-the-large, an
+  `operating_point(max_fpr=…)` that answers `GOAL-2`'s question in one call or returns `None`, a seeded
+  percentile bootstrap that refuses an interval it cannot support, per-generator breakdowns that mark
+  their own thin cells, and `to_eval_report()`, whose output is validated by the same
+  `synthverify.model-manifest/v1` code CI runs. numpy only — no `scikit-learn`, no `scipy`, so the
+  metrics do not need the extra that the detectors do.
+  Nothing in `metrics.py` reads a dataset — that half arrived afterwards as `datasets.py` — so the maths
+  was checkable before a corpus existed, and every array these tests score is still hand-built in the
+  test file.
+- **`scripts/metrics_e2e.py`, `make eval`, `make eval-mutations`, and a thirteenth CI job
+  (`evaluation`)** — the evaluator, evaluated. The ten ways a headline metric could be quietly wrong
+  when this landed (inverted
+  AUC, ties credited twice, DeLong off the Mann-Whitney identity, a clamped normal interval where a
+  logit one is claimed, an exclusive decision threshold, an EER read off the far side of a jump, ECE
+  switched to the decision convention, equal-width calibration bins, a percentile interval whose lower
+  arm is the median, an operating point that ignores its own FPR cap) are each applied to a shadow copy
+  of the package, and the suite has to go red. Graded by
+  `make eval && make eval-mutations` = **anchors PASS 10/10, baseline 53 metric tests 0 failing, all ten
+  caught**; `pytest tests/test_eval_metrics.py` = **53 passed**.
+  Two of the ten survived their first draft and neither fault was in the module: every pre-existing
+  tie test used continuous scores, so a wrong tie term in DeLong changed nothing any of them could
+  see, and a percentile interval that starts at the median is still deterministic, still widens as n
+  shrinks and still refuses thin data. Both now have a discriminating test.
+- **`synthverify/eval/scoretable.py` — the append-only score ledger a night-long run writes into**, so
+  the measurement half has a place to put a number before it has a number. Line-delimited CSV with
+  `os.fsync` after every batch: a batch that landed survives `kill -9`, and a final line with no
+  newline is recognised from the line itself and dropped rather than becoming a measurement. Loading
+  keeps the **last** row per `(sample_id, detector)` — a bug fixed at 03:00 can be re-scored without
+  deleting the day's work — and surfaces `duplicate_rows` and `torn_line` instead of applying that
+  policy silently. `vectors(detector, status="ran")` is the analysis seam and the status filter is its
+  whole point: `SKIPPED` and `ERROR` rows carry `score = 0.0` because `DetectorResult` must carry *a*
+  number, and on this scale 0.0 reads as "confidently authentic", so leaving them in would inflate AUC
+  with work the detector never did. `latency_ms()` is `GOAL-1`'s column over every status.
+  `vectors_by_group(group_by="generator")` was described here as RQ1's table until the CLI ran it and
+  found that a generator directory is one class by construction, so no grouping alone can produce a cell
+  with an AUC in it; `ScoreTable.cells_against_reals()` is that table, arrived with **T56** below.
+  **The format was chosen by measuring, not inherited from the plan**, which said gzip-CSV: at ~9,000
+  samples × ~12 detectors the table is ~108 k rows and under 10 MB, so compression buys nothing, while
+  appending a second gzip member leaves members 2..n without a readable header and recovering from a
+  mid-member truncation needs `GzipFile`'s private per-member offset — the exact durability property the
+  format exists for. Graded by `pytest tests/test_eval_scoretable.py` = **37 passed**, and
+  `pytest tests/test_eval_metrics.py tests/test_eval_scoretable.py` = **90 passed, 0 failed**.
+  Two of those tests exist because the suite found bugs rather than confirming intent: precision was
+  being rounded in the serialiser instead of on the row, so a row held in memory and the same row read
+  back were unequal — which is a resumed run appending a duplicate score and last-write-wins picking
+  one of them quietly; and the `DetectorResult` adapter used `getattr(result, "status", None)`, so a
+  status outside the vocabulary became the string `"none"` and only blew up later as a schema error with
+  no pointer back to the caller.
+- **`synthverify/eval/datasets.py` and `synthverify/eval/split.py` — the corpus seam and the split that
+  makes a number admissible.** The loader **never downloads**: `goal-spec.md` FC-4 requires the product
+  to run fully offline, and the corpora this thesis uses are `CC BY-NC-SA-4.0` / research-only, which
+  makes them operator-supplied files rather than dependencies, so nothing that ships may fetch them. A
+  test enforces that at the module level by asserting the source contains no `urllib`, `requests`,
+  `httpx`, `huggingface_hub`, `socket` or `urlretrieve`. What remains is a reader with teeth: it walks a
+  declared directory layout, refuses an image that matched no declared generator instead of quietly
+  ignoring it, and writes a committed CSV **manifest** (`sample_id, dataset, generator, truth, path`)
+  that the next run reads back — because "the label came from the directory name" is a claim, and a
+  manifest is the form of that claim someone can audit. `read_manifest` refuses the five ways it can lie
+  about a corpus: a header that is a different file, a row missing a field, a truth that is not 0/1, a
+  path that no longer resolves ("a missing file is not a zero-scored sample" — a loader that skipped it
+  would score 9,800 images and report n = 10,000), and a repeated sample id. Three corpora are declared
+  in `CORPORA` with their licences, and `CNNSpot` carries `admissible_for_headline=False` because its
+  uniform 224 px downsampling lets a detector win on resolution rather than content.
+  **The split is the load-bearing half.** Assignment is `sha256(f"{seed}|{sample_id}")`'s first eight
+  bytes over 2⁶⁴, bucketed against cumulative proportions — not a row index, not directory order, because
+  either of those re-labels samples when a corpus is filtered, grown or re-downloaded, which silently
+  moves data out of the held-out set and would make the thesis number unreproducible with no error to
+  notice. `train` / `calibration` / `validation` / `held_out_test` at 50/20/15/15 keeps the set that
+  fits fusion weights provably disjoint from the set that scores them. Two properties the hash buys and
+  an index does not are tested by name: **subset stability** (every sample of a filtered corpus keeps
+  its split) and **shuffle invariance**. The assignment is a committed JSONL file whose first line
+  declares format, seed and proportions, and `load()` **re-derives every row against the file's own
+  seed** and refuses the file if a row disagrees — that is the check that catches a hand-edited split,
+  the one edit that turns a held-out set into a leak. `.digest` is the SHA-256 of those bytes, so a run
+  can be tied to the exact split it used and a reviewer can reproduce the tie with `sha256sum`.
+  `thin_cells()` and `empty_cells()` report the shape problem *before* a six-hour pass rather than in
+  the results after it: a generator with one image occupies one bucket and is simply absent from the
+  other three, which otherwise reads as "every generator generalises".
+  Graded by `pytest tests/test_eval_split.py` = **37 passed**, `pytest tests/test_eval_datasets.py` =
+  **39 passed**, and the whole measurement package `pytest tests/test_eval_{metrics,scoretable,split,datasets}.py`
+  = **166 passed, 0 failed**. Three defects were caught by writing the tests rather than by reading the
+  code. Two were in the tests: an `empty_cells()` assertion that a twelve-sample corpus satisfied
+  trivially (it does reach all four splits), now pinned to a one-image generator that provably cannot;
+  and `manifest_digest(m) == manifest_digest(m)`, which asserted nothing, replaced by the digest against
+  `hashlib.sha256(m.read_bytes())` plus a pair that requires it to be blind to write order and sensitive
+  to a row. The third was in the register: `CORPORA` carried `m4`, which is a **text** corpus from the
+  plan's optional generalisation experiment, marked `admissible_for_headline=True` on a licence recorded
+  as unresolved — a category error for an image loader and, worse, exactly the thing `AC-DET-1b`
+  forbids. It is gone, the register is pinned as a set so a fourth corpus is a decision made twice, and a
+  new test refuses any entry whose licence hedges while claiming a headline number.
+- **`synthverify score` and `synthverify eval` — the harness becomes a command** (`synthverify/cli.py`,
+  `synthverify/eval/runner.py`, `scripts/eval_fixture_e2e.py`). `score` runs every selected detector over
+  a corpus into the resumable CSV table: one `DetectionContext` per sample so the image detectors share a
+  single decode, one fsynced batch per sample so a kill at 03:00 loses the sample in flight and nothing
+  else, `row_from_result` adapting each opinion, and `SKIPPED`/`ERROR` conversion inherited from
+  `Detector.run()` rather than reimplemented. **Resume is the requirement**: `sample_id` is the key, so
+  the second invocation writes **0** rows, `--require-all` widens the definition to "every named
+  detector has spoken" for the detector added mid-night, and `--force` is the only way to re-score — which
+  is not an overwrite, because the table is append-only: both answers stay in the file, `load()` resolves
+  the pair to the newer row, and `duplicate_rows` says so on every read. `--limit`/`--sample` make a
+  thirty-second smoke run the same code path as the overnight one. `--scan-dir` writes the manifest and
+  the split file for a corpus already on disk — nothing here downloads one (FC-4) — and refuses to
+  rewrite either artefact without `--overwrite`, because re-issuing a split silently changes which
+  samples are held out from every run already measured against it. `--dry-run` prints the plan and
+  commits nothing, including the split digest it *would* write, so the check that catches the wrong
+  corpus cannot itself be the thing that commits one. `eval` prints the pooled metrics and, with
+  `--by-generator`, one cell per generator pooled with every real (RQ1's table); a cell under
+  `MIN_CELL_N=30` prints no number by default and `--allow-thin` marks the line `THIN`, with every
+  refusal counted into the exit code. `synthverify analyze` gained `--dir/--jsonl` for the stranger with a
+  folder of their own images and no corpus metadata, which kept its single-file form.
+  Graded by `pytest tests/test_eval_runner.py` = **22 passed**, `pytest tests/test_cli_eval.py` = **15
+  passed** (new file: argv in, exit code and stdout out), `make eval-fixture` = **30 checks passed, 0
+  failed, RESULT: PASS**, and a seventeenth step in the CI `evaluation` job so the chain cannot rot.
+  The fixture leg asserts *refusals* as the correct answer for twelve images on purpose: it proves the
+  chain without pretending to prove a number. It found three things reading the library had not — see
+  **Changed**.
+- **`synthverify eval` reads one named split** (`--split-file`, `--split`; `synthverify/cli.py`,
+  `synthverify/eval/runner.py`, `synthverify/eval/scoretable.py`). The gap between *measuring* correctly
+  and *reporting* correctly was unguarded: `eval` read every row in the score table, and a table is
+  append-only across a walk, so the same command over a table holding `train`, `calibration`,
+  `validation` and `held_out_test` printed a headline AUC computed over rows that include the ones a
+  detector was fitted on — labelled held-out, because nothing said otherwise. `--split-file F` now makes
+  the read a *filter*: the default is `held_out_test`, the rows kept are cross-checked against the
+  committed assignment rather than trusted, the rows belonging to other splits are reported as set aside
+  instead of lost, `--split train,held_out_test` reads a union, and `--json` carries a `split` block with
+  the file, that file's own SHA-256, the split names and the kept/dropped/sample counts. Four refusals
+  came with it, each with its reason: a `truth` cell edited in the CSV (the refusal quotes both
+  statements — `table says real/truth=1, the split file says real/truth=0` — and does not touch the file),
+  a split file whose rows no longer follow from its own seed (`… this file is stale for its own seed`,
+  refused before a row of it is read), a selection with no scored row underneath it (printed with the
+  file's own cell sizes), and a selection filtered down to one class — refused with `AUC is undefined with
+  only one class present` and no number printed beside it. `--split` without a file to check it against is
+  refused too, because a name is not a partition. Two library pieces moved with it: `ScoreRow.key`
+  addresses a row by **dataset and** sample id (two corpora legitimately contain
+  `COCO_val2014_000000000042.jpg`), and `ScoreTable.subset(keys)` is a read-only view that carries the
+  file's `torn_line` and `duplicate_rows` notes. `read_splits()` returns a frozen `SplitRead` whose
+  `describe()` is the text the CLI prints, so the counts an operator reads are the counts the filter
+  computed.
+  Graded by `pytest tests/test_cli_eval.py tests/test_eval_runner.py tests/test_eval_scoretable.py` =
+  **95 passed, 0 failed** (17 of them new) at this entry's close, and **96 passed** on the tree that ships —
+  the extra case is **T59**'s refusal-message test, landing in `tests/test_cli_eval.py`, and the whole
+  three-file command is re-run rather than inherited. `make eval` = **all 16 anchors quote exactly one place** then
+  **both baselines green (55 and 96 tests, 0 failing)**, `make eval-mutations` = **16/16 caught** (8 s wall
+  on the shipped tree) with five of the modes aimed at the read rather than the maths, `make eval-fixture` = **47 checks
+  passed, 0 failed**, and eleven new `--mutate` steps' worth of CI names in the `evaluation` job (16 in
+  total, set-equal to `metrics_e2e.PATCHES`). The mode that matters most is `unfiltered-read-undeclared`:
+  with it, `--split held_out_test` filters nothing, prints a confident table, and says no word about it —
+  which is exactly the shape of the leak, and the reason a new flag on its own would not have been a fix.
+  The row-losing collision this exposed (the score table's own dedup and resume keys are still bare
+  `sample_id` while the split layer now qualifies them) is recorded as **T60** rather than folded in here:
+  it changes which rows a table *keeps*, which is a different claim from which rows a metric may read.
+- **The first metrics this repository has ever printed from bytes it did not generate**
+  (`docs/corpus-communityforensics.md`, `scripts/commfor_fetch.py`, `scripts/commfor_check.py`,
+  `scripts/commfor_nullcontrol.py`, `scripts/commfor_plan_v1{,b,c,d}.json`). 2,376 images / 592.0 MB,
+  fetched in four bounded passes from the `CompEval` split of `OwensLab/CommunityForensics-Eval`
+  (`gated: False`, `cc-by-nc-sa-4.0` as served), recorded with per-file provenance — source row index,
+  request URL and byte offset, the generator's own `model_name`, the paired `real_source` pool, the
+  14-key `provenance.jsonl` record — under tranche id `commfor_eval_v1`. **The corpus itself is not in the
+  repository and never will be**: it sits under `data/corpora/`, which `.gitignore` excludes, because
+  third-party research images are non-commercial and a clone-and-run release must not redistribute them.
+  What ships is the four plans, the three scripts that replay them, and the document that states every
+  number with the command that printed it.
+  Two deliberate deviations from the task as written, both recorded in that document: the plan named
+  `CommunityForensics-Small`, and the Hub serves that repository with **exactly one split, called
+  `train`** (10,542 rows), so scoring it would have measured the detectors on the training distribution
+  of the same set — the leak **T58** closed at the reporting end, re-opened at the data end where no flag
+  can see it. `CompEval` is the split the authors publish *for* evaluation, and every row fetched here
+  carries `"split": "test"` and `"subset": "CompEval"` in its own source metadata (`Counter` over 2,376:
+  one value each). Second, the real class is CompEval's paired real pools, not the COCO validation set the
+  authors' contamination note also prescribes, because the fetch keeps PNG and JPEG containers and the real
+  pools serve WEBP rows — which is a selection effect of *this tool*, counted as a skip rather than quietly
+  shrinking a pool, and it is the confound the results inherit.
+  The chain, as executed: `commfor_check.py` → `integrity: 2376 records, 0 fault(s)` / `RESULT: PASS`, with
+  the written manifest cross-checked row-for-row against provenance; `synthverify score` → 2,376 samples /
+  **11,880 rows** in 60.8 s with `unreadable: 0` and `unscored: 0`, manifest `96a56408…`, split file
+  `b28c5ec2…`, sizes `train=1198, calibration=461, validation=351, held_out_test=366`;
+  `synthverify eval --split held_out_test --by-generator` → **28 AUCs and 9 refusals** over the 1,830 held-out
+  rows, with the other 10,050 reported as set aside.
+  What it says is not kind, and the document does not soften it: the only headline above chance is `noise` at
+  **0.8585 [0.7920, 0.9063]**, while `frequency` **0.4352**, `ela` **0.3551** and `metadata` **0.0377** sit
+  *below* chance against these reals, and `jpeg_history` is refused for one class present (it only runs on
+  JPEGs and every fake in the tranche is PNG — `coverage: jpeg_history ran=691, skipped=1685` is the same fact
+  before any metric exists). `metadata` then prints **the identical AUC and the identical interval in all six
+  reporting generator cells**, which is a container classifier wearing a forensics label. The four null
+  controls in `scripts/commfor_nullcontrol.py` — same class on both sides by construction, so 0.5 is what no
+  artefact looks like — are what turns the headline from a result into a refutation: **`noise` separates two
+  pools of real photographs at 0.6998 [0.6197, 0.7693]** and separates DeciDiffusionV2's fakes from LCM's at
+  the same size, container and source pool at **0.3857**. A detector that moves that much on differences that
+  are not generation is not measuring generation.
+  One product defect came out of reading the real report rather than the fixture: a refusal said `below
+  MIN_CELL_N=30` while naming only the cell's *total*, so an operator could not see which side was thin —
+  `synthverify/cli.py` now prints the failing counts on both the pooled line and the per-cell line
+  (`refused: pos/neg=10/106 of n=116 below MIN_CELL_N=30`). Found by running the report, written red first as
+  `tests/test_cli_eval.py::test_a_refusal_names_the_count_that_failed_not_the_cells_total`, then green.
+  Graded on this tree: `make eval` → `--check-anchors` **PASS (16/16)**, **`[baseline metrics] 55 tests, 0
+  failing`** and **`[baseline split-read] 96 tests, 0 failing`**; `make eval-mutations` → **16/16 caught**,
+  13/11/1/1/1/1/1/2/1/1/2 red of the 55 metric cases and 9/1/8/1/1 of the 96 split-read cases;
+  `make eval-fixture` → **47 checks passed, 0 failed**; `pytest tests/test_cli_eval.py
+  tests/test_eval_runner.py tests/test_eval_scoretable.py` → **96**. **What this does not claim:** it is not
+  evidence that SynthVerify detects synthetic media, it is evidence that the shipped heuristics do not clear
+  this corpus's confound; no learned detector was in the run; calibration on these 461 rows (**T57**) and a
+  confound-matched tranche (which needs a new fetch — there are **zero** PNG reals at any of the fake sizes)
+  are both still open.
+- **Credentials got finer, then got a second type — `REQ-IDAM-2` (T48) and `REQ-IDAM-1` (T49).**
+  `SCOPE_VOCABULARY` (14 tokens) in `synthverify/auth.py`, a nullable `ApiKey.scopes` column (Alembic `0008`,
+  added last so `create_all()` and a migrated DB keep byte-identical `sqlite_master`), `effective_scopes()`
+  falling through to the role grant when a key predates scopes, and `require_scope(*scopes)` — whose 403 names
+  the missing token — wired into `/media/ingest[+/batch]`, `/jobs[/{id}]`, `/jobs/{id}/reanalyze` and
+  `/jobs/{id}/artifacts[/{index}]`; a `service` key that reaches `/admin/*` is refused on the platform-admin
+  role gate *before* scope evaluation. Then OIDC: `Authorization: Bearer <jwt>` verifies against a locally
+  minted test-key JWKS through **PyJWT** (graded `MIT` by `synthverify licenses`) with
+  `SV_OIDC_ALLOWED_ALGORITHMS` checked *before* PyJWT
+  sees the token, which is what defeats algorithm confusion. A token and an API key travel the same code path
+  behind one `@runtime_checkable Principal` protocol, so `require_role` / `require_scope` / `visible_to` do not
+  branch on credential type. The verifier ships as the optional `[jwt]` extra (`PyJWT[crypto]` → `cryptography`
+  /Apache-2.0, `cffi`/MIT-0, `pycparser`), so a default install still pulls no JWT library and `oidc_enabled`
+  short-circuits before any socket, leaving the FC-4 air-gap untouched. Claim paths default to the `sv_` prefix
+  (`sv_role`/`sv_scopes`/`sv_org`), deliberately **not** `synthverify_` — that prefix is the Prometheus metric
+  namespace and the alert-rules gate grades every `synthverify_…` string literal as an emitted metric that must
+  carry a HELP text.
+  *Measured, not asserted, on this tree (2026-10-01).* `pytest tests/test_scopes.py
+  tests/test_tenancy_matrix.py tests/test_migrations.py` → **80 passed, 5 skipped** (15 scope, 48 tenancy, 17
+  migration; Postgres-only skips); `pytest tests/test_oidc.py` → **23 passed** (with the 15 scope tests,
+  `tests/test_oidc.py tests/test_scopes.py` = **38 passed in 7.68 s**), including
+  `test_ac_idam_1_rejects_a_token_for_another_audience` (a token for another audience cannot authenticate),
+  `test_alg_confusion_is_refused` (the allow-list check fires before PyJWT sees the token) and
+  `test_oidc_disabled_short_circuits_before_the_network` (a default install reaches no JWKS socket). `test_the_declared_root_count_matches_what_the_gates_print`
+  now reads **22 declared roots → 52 packages** and the lock carries **53 pins**, both re-derived from the
+  resolved closure rather than asserted; `MIT-0` was added to `ALLOWED_LICENSES` for `cffi`. The full SQLite leg
+  through `.venv/bin/python`: **1023 tests → 1002 passed, 0 failed, 21 skipped in 163.8 s** (the 21 are
+  Postgres/Valkey-only). The Postgres leg and the two container legs (`make lock-e2e`, `make airgap`) are
+  **RE-MEASURE PENDING** on this machine — the services are down and the thermal budget says do not spin them up
+  for a doc pass; the README rows carry that label rather than restating the pre-change numbers.
+- **`mypy` cleared to zero and became a real gate (T50).** The tree read **21 errors in 12 files** while
+  `make typecheck` ended in `|| true` — informational precisely because nobody ran it. Every finding is closed
+  (`Success: no issues found in 73 source files`): `cast`s at the `importlib.metadata` `PackageMetadata` /
+  `PackagePath` seam in `compliance/licenses.py` that typeshed does not model, the missing annotations across
+  `auth.py`/`cli.py`/`routes_media.py`/`routes_admin.py`/`config.py` and the pre-existing `0004` migration, and
+  `types-PyYAML` (PEP 561) declared in `dev` so the alert-rules scanner's `import yaml` type-checks. `make
+  typecheck` no longer swallows the exit code and `.github/workflows/ci.yml` gained a **Type check** step beside
+  Lint, so a regression is caught rather than accumulated.
+
+### Changed
+
+- **The operator console was redesigned** (`synthverify/dashboard/index.html`). It now reads as a
+  forensic case file rather than a generic admin page: a sticky rail whose tabs carry live per-tab
+  indicators, one rotated double-ruled verdict seal as the loud element, numbered exhibits (`E1`…`En`
+  per detector, `A1`…`An` per artifact), and three type layers that keep an identifier (mono), a
+  written opinion (serif) and interface chrome (grotesque) visibly distinct. It is still one file with
+  no build step and no CDN, so an air-gapped console cannot phone home (FC-4, `REQ-OPS-4`).
+- Two layout defects that measurement caught and eyeballing did not: the credentials and callbacks
+  tables overflowed their grid track and painted under the adjacent form, so a visible "Deliveries"
+  button could not be clicked; and the queue's seven columns needed 793px in a 470px track beside the
+  open-record card. Both tabs are now stacked, every wide table sits in its own scroll container, and
+  the two-pane split only engages above 1500px where the queue has 730px of its own.
+- Graded by `pytest tests/test_api.py tests/test_release_hygiene.py tests/test_tenancy_matrix.py`
+  (93 passed, 0 failed), by the four screenshots at the top of `README.md` (which render this file),
+  and by a headless pass that asserts zero horizontal overflow, zero clipped or spilled boxes and zero
+  unlabelled controls at 1240px, 1680px and 390px.
+- **Average precision is credited at the threshold a positive sits at, not at its row rank**
+  (`synthverify/eval/metrics.py`). Found by running `synthverify eval --by-generator` over a twelve-image
+  fixture: the pooled cell and the generator cell held the *same twelve rows* and printed **0.3468** and
+  **0.5022**. The rank form also gave a detector that emits one constant score **AP 1.0** whenever its
+  rows happened to land positives-first — a headline number that was a property of the score table's file
+  order. Ties are now grouped the way `roc_curve()` already grouped them, which is the module's own
+  convention rather than a new one. Policed by two tests and by a new mutation mode
+  (`ap-rank-not-threshold`, the eleventh) that reinstates the rank rule and is confirmed caught: `make
+  eval` = **anchors PASS, all 11 quote exactly one place** and **`[baseline] 55 metric tests, 0 failing`**,
+  `make eval-mutations` = **all eleven caught** at **13/11/1/1/1/1/1/2/1/1/2** red per mode in
+  Makefile order — mode B moved from 10 to 11 because the constant-score test asserts the AUC as well,
+  and every other count is the one T53, T54 and T55 recorded.
+- **`--by-generator` measures a cell against the real photographs, and says when it cannot**
+  (`synthverify/eval/scoretable.py`). `vectors_by_group("generator")` returns single-class buckets —
+  a generator directory *is* one class under these labels — so every cell raised
+  `InsufficientLabelsError`, the CLI swallowed it, and the breakdown printed nothing while looking like a
+  detector that had scored nothing. `cells_against_reals()` joins each fake group with every real row,
+  read once so the cells are comparable with each other, and refusals now travel back to the printer with
+  their reason and their exit code.
+- **A mistake in `score`'s argv is a message with exit 2, not a traceback** (`synthverify/cli.py`).
+  `--sample` and `--limit` are validated inside `pending_samples`, which the handler had left outside its
+  guard, so a typo in a command queued for six hours produced a Python stack and exit 1. The `try` now
+  covers argv-through-write; the regression is asserted in `tests/test_cli_eval.py` and in the CI leg.
+  `eval --json` also gained the `sufficient_sample` key its own docstring had been promising: the text
+  table marks a thin line `THIN`, and a thin number reaching a machine reader without that flag is the
+  failure the gate exists to prevent.
+- **The measurement gates are documented where the other gates are, and the README's fence pairing is
+  repaired** (`README.md`). `make eval`, `make eval-mutations` and `make eval-fixture` join the gate
+  list, and §2.5 gains three rows, so that section's own promise — every command, its exact output, and
+  what the number does *not* prove — holds for the harness as it already does for the infrastructure
+  gates. The rows were written against a fresh run on this tree, not inherited: `make eval` = **anchors
+  PASS, all 11 quote exactly one place** + **`[baseline] 55 metric tests, 0 failing → RESULT: PASS`**,
+  `make eval-mutations` = **11/11 caught, exit 0** at **13/11/1/1/1/1/1/2/1/1/2**, `make eval-fixture` =
+  **30/30, RESULT: PASS**. The defect found on the way: that gate list had **no opening code fence**, so
+  its closing ` ``` ` *opened* a block instead of closing one — the eighteen `make …` lines rendered as
+  loose prose and the two paragraphs after them, plus a literal ` ```bash `, rendered as monospace code,
+  until the next bare fence re-paired. `grep -c '^```' README.md` read **19** (odd) before the fix and
+  **20** (even) after, and a CommonMark-correct pairing scan (a fence closes only with no info string and
+  at least its opener's length, which is why ` ```bash` inside a block is content) now reports the list
+  as one code run and every block after it correctly paired. Graded with `pytest
+  tests/test_release_hygiene.py tests/test_cli_eval.py tests/test_eval_metrics.py` = **91 collected, 0
+  failures, 0 errors, 0 skipped** in 0.612 s (junit) — the doc guards, the CLI's own 15, and the 55
+  metric tests the gate counts — and `make lint` = **All checks passed!**.
 
 ## [1.0.0] — 2026-09-27
 

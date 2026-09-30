@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from synthverify.auth import not_found_or_self, org_clause, require_admin, require_analyst
+from synthverify.auth import not_found_or_self, org_clause, require_admin, require_scope
 from synthverify.config import get_settings
 from synthverify.db import ApiKey, AuditLedger, Job, JobStatus, MediaAsset
 from synthverify.ratelimit import rate_limit
@@ -42,14 +42,14 @@ def _get_job_or_404(request: Request, job_id: str) -> Job:
         session.close()
 
 
-@router.get("/{job_id}", dependencies=[Depends(require_analyst), Depends(rate_limit)])
+@router.get("/{job_id}", dependencies=[Depends(require_scope("jobs:read")), Depends(rate_limit)])
 async def get_job(request: Request, job_id: str, include_report: bool = True):
     """Full job state; once completed, includes the complete XAI report."""
     job = _get_job_or_404(request, job_id)
     return job.to_dict(include_result=include_report)
 
 
-@router.get("", dependencies=[Depends(require_analyst), Depends(rate_limit)])
+@router.get("", dependencies=[Depends(require_scope("jobs:read")), Depends(rate_limit)])
 async def list_jobs(
     request: Request,
     job_status: JobStatus | None = Query(None, alias="status"),
@@ -90,7 +90,7 @@ async def list_jobs(
         session.close()
 
 
-@router.post("/{job_id}/reanalyze", status_code=202, dependencies=[Depends(require_analyst), Depends(rate_limit)])
+@router.post("/{job_id}/reanalyze", status_code=202, dependencies=[Depends(require_scope("jobs:write")), Depends(rate_limit)])
 def reanalyze(
     request: Request,
     job_id: str,
@@ -189,7 +189,7 @@ def _resolve_artifact_file(job: Job, index: int) -> tuple[Path, dict]:
     return path, entry
 
 
-@router.get("/{job_id}/artifacts", dependencies=[Depends(require_analyst), Depends(rate_limit)])
+@router.get("/{job_id}/artifacts", dependencies=[Depends(require_scope("artifacts:read")), Depends(rate_limit)])
 async def list_job_artifacts(request: Request, job_id: str):
     """Forensic artifacts (heatmap images) recorded by a completed job."""
     job = _get_job_or_404(request, job_id)
@@ -206,7 +206,7 @@ async def list_job_artifacts(request: Request, job_id: str):
     }
 
 
-@router.get("/{job_id}/artifacts/{index}", dependencies=[Depends(require_analyst), Depends(rate_limit)])
+@router.get("/{job_id}/artifacts/{index}", dependencies=[Depends(require_scope("artifacts:read")), Depends(rate_limit)])
 async def get_job_artifact(request: Request, job_id: str, index: int):
     """Serve one artifact image bytes to an authenticated viewer."""
     job = _get_job_or_404(request, job_id)

@@ -133,7 +133,7 @@ def bind_trace(trace_id: str | None, span_id: str | None = None) -> Iterator[str
     from it.
     """
     token = trace_id_var.set(trace_id or "")
-    span_token = span_id_var.set(span_id if is_valid_span_id(span_id) else "")
+    span_token = span_id_var.set(span_id if span_id is not None and is_valid_span_id(span_id) else "")
     try:
         yield trace_id or ""
     finally:

@@ -48,6 +48,7 @@ class KeyCreate(BaseModel):
     organisation: str = Field(default="default", max_length=120)
     platform_scope: bool = False
     rate_limit_rpm: int | None = Field(default=None, ge=1, le=10_000)
+    scopes: list[str] | None = None
 
     @model_validator(mode="after")
     def _platform_scope_needs_admin(self) -> KeyCreate:
@@ -63,6 +64,20 @@ class KeyCreate(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _validate_scope_tokens(self) -> KeyCreate:
+        """Reject unknown scope tokens at mint time rather than silently granting nothing."""
+        from synthverify.auth import SCOPE_VOCABULARY
+
+        if self.scopes is not None:
+            unknown = [s for s in self.scopes if s.strip() and s.strip() not in SCOPE_VOCABULARY]
+            if unknown:
+                raise ValueError(
+                    f"Unknown scope token(s): {', '.join(unknown)}. "
+                    f"Valid scopes: {', '.join(sorted(SCOPE_VOCABULARY))}."
+                )
+        return self
+
 
 @router.post("/keys", status_code=201)
 async def create_key(request: Request, body: KeyCreate):
@@ -71,6 +86,7 @@ async def create_key(request: Request, body: KeyCreate):
     session = request.app.state.db.session()
     try:
         secret = generate_api_key(settings.api_key_prefix)
+        scopes_str = ",".join(s.strip() for s in body.scopes if s.strip()) if body.scopes else None
         key = ApiKey(
             key_id=secrets.token_hex(4),
             key_hash=hash_key(secret),
@@ -79,6 +95,7 @@ async def create_key(request: Request, body: KeyCreate):
             organisation=body.organisation,
             platform_scope=body.platform_scope,
             rate_limit_rpm=body.rate_limit_rpm,
+            scopes=scopes_str,
         )
         session.add(key)
         AuditLedger(session).append(
@@ -297,10 +314,10 @@ async def stats(request: Request):
                 select(Job.risk_tier, func.count(Job.id)).where(Job.risk_tier.is_not(None)).group_by(Job.risk_tier)
             ).all()
         )
-        by_action = {}
-        avg_latency = None
+        by_action: dict[str, int] = {}
+        avg_latency: float | None = None
         recent = session.execute(select(Job).where(Job.status == JobStatus.COMPLETED.value).order_by(Job.created_at.desc()).limit(200)).scalars().all()
-        durations = []
+        durations: list[float] = []
         for job in recent:
             result = job.result or {}
             action = (result.get("verdict") or {}).get("recommended_action", "UNKNOWN")

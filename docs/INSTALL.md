@@ -21,7 +21,7 @@ git clone https://github.com/aashish254/synthverify.git
 cd synthverify
 make setup          # creates .venv, installs every declared extra from docker/requirements-lock.txt
 make doctor         # names anything missing; exit 0 means the environment is complete
-make test           # 753 tests, ~3 min, SQLite - no services required
+make test           # 1023 tests, ~3 min, SQLite - no services required
 make demo           # 9 synthetic-vs-authentic samples through the real pipeline
 ```
 

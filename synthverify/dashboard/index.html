@@ -3,335 +3,1219 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SynthVerify Console</title>
+<title>SynthVerify — operator console</title>
 <style>
-  :root {
-    --bg: #0e1117; --panel: #161b26; --panel2: #1d2331; --line: #2a3245;
-    --text: #e6ebf4; --muted: #8b96ab; --accent: #4f8cff;
-    --low: #2fbf71; --medium: #f2b544; --high: #f2704f; --critical: #e64545;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
-  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  header h1 { font-size: 17px; font-weight: 650; letter-spacing: .3px; }
-  header h1 span { color: var(--accent); }
-  header .spacer { flex: 1; }
-  header input { background: var(--panel2); border: 1px solid var(--line); color: var(--text); padding: 7px 10px; border-radius: 8px; width: 320px; }
-  header button { background: var(--accent); border: 0; color: white; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
-  nav { display: flex; gap: 4px; padding: 0 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
-  nav button { background: none; border: 0; color: var(--muted); padding: 10px 14px; cursor: pointer; font-size: 13.5px; border-bottom: 2px solid transparent; }
-  nav button.active { color: var(--text); border-bottom-color: var(--accent); }
-  main { padding: 20px 24px; max-width: 1280px; margin: 0 auto; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
-  .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
-  .card .v { font-size: 24px; font-weight: 700; margin-top: 4px; }
-  .card .v.t-HIGH { color: var(--high); } .card .v.t-CRITICAL { color: var(--critical); }
-  .card .v.t-MEDIUM { color: var(--medium); } .card .v.t-LOW { color: var(--low); }
-  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  th { text-align: left; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
-  td { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
-  tr:hover td { background: var(--panel2); cursor: pointer; }
-  .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
-  .b-LOW { background: rgba(47,191,113,.15); color: var(--low); }
-  .b-MEDIUM { background: rgba(242,181,68,.15); color: var(--medium); }
-  .b-HIGH { background: rgba(242,112,79,.15); color: var(--high); }
-  .b-CRITICAL { background: rgba(230,69,69,.18); color: var(--critical); }
-  .b-status { background: var(--panel2); color: var(--muted); border: 1px solid var(--line); }
-  .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
-  .muted { color: var(--muted); }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 16px; }
-  .panel h3 { margin-bottom: 10px; font-size: 15px; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .det { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel2); margin-bottom: 10px; }
-  .det .head { display: flex; justify-content: space-between; align-items: center; }
-  .bar { height: 6px; border-radius: 4px; background: var(--line); margin-top: 8px; overflow: hidden; }
-  .bar > div { height: 100%; background: var(--accent); }
-  .flag { display: inline-block; background: rgba(230,69,69,.12); color: var(--critical); border: 1px solid rgba(230,69,69,.3); padding: 2px 8px; border-radius: 6px; font-size: 11.5px; margin: 2px 4px 2px 0; }
-  ul.findings { padding-left: 18px; color: var(--text); }
-  ul.findings li { margin: 4px 0; color: var(--muted); }
-  .btn { background: var(--panel2); border: 1px solid var(--line); color: var(--text); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; }
-  .btn.primary { background: var(--accent); border: 0; color: white; font-weight: 600; }
-  .btn.danger { color: var(--critical); }
-  form.inline { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-  form.inline input, form.inline select { background: var(--panel2); border: 1px solid var(--line); color: var(--text); padding: 7px 10px; border-radius: 8px; }
-  #toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px; display: none; }
-  .score-donut { font-size: 30px; font-weight: 800; }
-  .hidden { display: none; }
-  code { background: var(--panel2); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
-  .art-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-  .art { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
-  .art img { width: 100%; image-rendering: pixelated; border-radius: 6px; background: #000; display: block; }
-  .art .cap { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12.5px; }
+/* Type is system-stack only on purpose: the console ships as one file with no build step and no
+   CDN (REQ-OPS-4), so a downloaded face would be an outbound call on an air-gapped install. */
+:root {
+  color-scheme: light;
+  --board: #e4e6e0;
+  --paper: #f5f6f2;
+  --paper-hi: #fdfdfa;
+  --ink: #171b19;
+  --ink-2: #535a55;
+  --ink-3: #656c66;
+  --rule: #c9cdc4;
+  --rule-hi: #b0b6aa;
+  --blue: #1d4b78;
+  --low: #1c6b46;
+  --medium: #8a5b12;
+  --high: #a14419;
+  --critical: #8d1c1c;
+  --f-chrome: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --f-doc: "Iowan Old Style", "Source Serif 4", "Palatino Linotype", Palatino, Georgia, serif;
+  --f-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --r: 3px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--board); color: var(--ink);
+  font: 14px/1.5 var(--f-chrome);
+  display: grid; grid-template-columns: 250px minmax(0, 1fr);
+  min-height: 100vh;
+}
+h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -.005em; }
+p { margin: 0; }
+a { color: var(--blue); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.skip {
+  position: absolute; left: 12px; top: -48px; z-index: 50; background: var(--paper-hi);
+  border: 1px solid var(--blue); border-radius: var(--r); padding: 8px 14px;
+  transition: top .12s ease;
+}
+.skip:focus { top: 12px; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.sub { color: var(--ink-2); }
+.faint { color: var(--ink-3); }
+.ts { white-space: nowrap; font: 12px/1.4 var(--f-mono); color: var(--ink-2); }
+
+/* ------------------------------------------------------------------ rail */
+.rail {
+  position: sticky; top: 0; align-self: start; height: 100vh; display: flex; flex-direction: column;
+  background: var(--paper); border-right: 1px solid var(--rule-hi);
+}
+.wordmark { padding: 20px 20px 16px; border-bottom: 1px solid var(--rule); }
+.wordmark h1 { font: 500 12px/1.3 var(--f-mono); letter-spacing: .1em; color: var(--ink-2); }
+.wordmark .brand { font: 600 20px/1.1 var(--f-doc); letter-spacing: -.02em; margin-bottom: 7px; }
+.wordmark .brand::after {
+  content: ""; display: block; width: 34px; height: 3px; background: var(--critical); margin-top: 7px;
+}
+.wordmark .pitch { margin-top: 11px; font: 13.5px/1.5 var(--f-doc); color: var(--ink-2); max-width: 30ch; }
+.rail nav { padding: 14px 0; }
+.rail nav p { padding: 0 20px 7px; font-size: 12px; color: var(--ink-3); }
+.tab {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+  background: none; border: 0; border-left: 3px solid transparent;
+  padding: 9px 20px 9px 17px; cursor: pointer; color: var(--ink-2);
+}
+.tab:hover { background: var(--paper-hi); color: var(--ink); }
+.tab[aria-selected="true"] {
+  background: var(--paper-hi); color: var(--ink); border-left-color: var(--critical);
+  font-weight: 600;
+}
+.tab .ind { margin-left: auto; font: 11px/1.4 var(--f-mono); color: var(--ink-3); white-space: nowrap; }
+.tab[aria-selected="true"] .ind { color: var(--ink-2); }
+.tab.primary { color: var(--ink); font-weight: 600; }
+.rail nav p:not(:first-child) { margin-top: 14px; }
+.drop {
+  display: flex; flex-direction: column; gap: 5px; align-items: flex-start;
+  margin-top: 16px; padding: 26px 20px; cursor: pointer;
+  background: var(--paper-hi); border: 1px dashed var(--rule-hi); border-radius: var(--r);
+}
+.drop:hover, .drop.over { border-style: solid; border-color: var(--blue); background: #fff; }
+.drop:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.drop-main { font: 600 15.5px/1.3 var(--f-chrome); color: var(--blue); }
+.caveat { margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--rule); max-width: 74ch; }
+.rail .connect { padding: 16px 20px; border-top: 1px solid var(--rule); margin-top: auto; }
+.rail label { display: block; font-size: 12.5px; color: var(--ink-2); margin-bottom: 6px; }
+.rail .keyrow { display: flex; gap: 6px; }
+#apiKey {
+  flex: 1; min-width: 0; background: var(--paper-hi); border: 1px solid var(--rule-hi);
+  border-radius: var(--r); padding: 7px 9px; font: 12.5px/1.4 var(--f-mono); color: var(--ink);
+}
+.rail .foot { padding: 12px 20px 18px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink-3); }
+.rail .foot code { font: 11px/1.4 var(--f-mono); }
+
+/* ----------------------------------------------------------------- main */
+main { min-width: 0; padding: 26px 30px 90px; }
+.crumb { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.crumb h2 { font: 600 22px/1.2 var(--f-doc); }
+.crumb p { font-size: 13px; color: var(--ink-2); max-width: 62ch; }
+form { margin: 0; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+input, select, textarea { font: inherit; color: inherit; }
+input[type="text"], input[type="url"], input:not([type]), select, textarea {
+  background: var(--paper-hi); border: 1px solid var(--rule-hi); border-radius: var(--r);
+  padding: 7px 9px; font-size: 13px;
+}
+.btn {
+  background: var(--paper-hi); border: 1px solid var(--rule-hi); border-radius: var(--r);
+  padding: 7px 13px; cursor: pointer; font-size: 13px; box-shadow: 0 1px 0 rgba(23,27,25,.06);
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn.go { background: var(--blue); border-color: var(--blue); color: #f7f8f5; font-weight: 600; }
+.btn.go:hover { background: #17405f; }
+.btn.warn { color: var(--critical); border-color: #cbb9b3; }
+.btn.warn:hover { background: #f6ecea; border-color: var(--critical); }
+.btn.warn[data-armed="1"] { background: var(--critical); border-color: var(--critical); color: #f7f2f0; font-weight: 600; }
+.btn:disabled { opacity: .55; cursor: default; }
+.bare { background: none; border: 0; padding: 0; cursor: pointer; color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+
+/* tags, bars, seals */
+.tag {
+  display: inline-block; border: 1px solid var(--rule-hi); border-radius: 2px;
+  padding: 1px 6px; font: 11px/1.5 var(--f-mono); color: var(--ink-2); background: var(--paper);
+  white-space: nowrap;
+}
+.tag.t-LOW { color: var(--low); border-color: #a8c4b5; background: #eef4ef; }
+.tag.t-MEDIUM { color: var(--medium); border-color: #d3c19c; background: #f6f1e6; }
+.tag.t-HIGH { color: var(--high); border-color: #d9b3a2; background: #f8efe9; }
+.tag.t-CRITICAL { color: var(--critical); border-color: #cfa3a0; background: #f8edeb; }
+.tag.s-failed { color: var(--critical); border-color: #cfa3a0; background: #f8edeb; }
+.tag.s-queued { color: var(--ink-3); }
+.tag.ok { color: var(--low); border-color: #a8c4b5; background: #eef4ef; }
+.meter { display: block; height: 7px; background: var(--board); border: 1px solid var(--rule); border-radius: 1px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--blue); }
+.meter.t-HIGH i, .meter.t-CRITICAL i { background: var(--high); }
+.meter.t-CRITICAL i { background: var(--critical); }
+.meter.t-MEDIUM i { background: var(--medium); }
+.meter.t-LOW i { background: var(--low); }
+.meter.s-delivered i { background: var(--low); }
+.meter.s-exhausted i, .meter.s-failed i { background: var(--critical); }
+.meter.s-pending i, .meter.s-retrying i { background: var(--medium); }
+.seal {
+  display: inline-grid; justify-items: center; gap: 1px; padding: 9px 20px 8px;
+  border: 2px solid currentColor; outline: 1px solid currentColor; outline-offset: 3px;
+  border-radius: 2px; transform: rotate(-2.2deg); background: var(--paper-hi);
+}
+.seal .tier { font: 700 12px/1.2 var(--f-doc); letter-spacing: .18em; text-transform: uppercase; }
+.seal .score { font: 500 34px/1 var(--f-mono); letter-spacing: -.03em; }
+.seal .of { font: 10.5px/1.4 var(--f-chrome); letter-spacing: .02em; color: var(--ink-2); }
+.seal.t-LOW { color: var(--low); } .seal.t-MEDIUM { color: var(--medium); }
+.seal.t-HIGH { color: var(--high); } .seal.t-CRITICAL { color: var(--critical); }
+
+/* panels and tables */
+.sheet { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--r); padding: 16px 18px; }
+.sheet + .sheet { margin-top: 16px; }
+.sheet > h3 { font: 600 15px/1.3 var(--f-doc); padding-bottom: 8px; border-bottom: 1px solid var(--rule); margin-bottom: 12px; }
+.strip { display: flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper); }
+.strip > div { flex: 1 1 120px; padding: 12px 14px; border-left: 1px solid var(--rule); }
+.strip > div:first-child { border-left: 0; }
+.strip dt { font-size: 12px; color: var(--ink-2); }
+.strip dd { margin: 3px 0 0; font: 500 24px/1.1 var(--f-mono); letter-spacing: -.02em; }
+.strip dd small { font: 12px/1 var(--f-chrome); color: var(--ink-3); letter-spacing: 0; }
+.stack { display: grid; gap: 3px; }
+.stack .row { display: grid; grid-template-columns: 9em minmax(0,1fr) 3.2em; gap: 10px; align-items: center; font-size: 12.5px; }
+.stack .row .val { text-align: right; font: 12.5px/1 var(--f-mono); color: var(--ink-2); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+caption { text-align: left; font-size: 12.5px; color: var(--ink-2); padding-bottom: 8px; }
+th {
+  text-align: left; font-weight: 600; color: var(--ink-2); font-size: 12px;
+  padding: 0 10px 6px 0; border-bottom: 1px solid var(--rule-hi); white-space: nowrap;
+}
+td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tbody tr:hover { background: var(--paper-hi); }
+tr[aria-current="true"] { background: var(--paper-hi); box-shadow: inset 3px 0 0 var(--blue); }
+tr[aria-current="true"] td { border-bottom-color: var(--rule-hi); }
+td.r, th.r { text-align: right; padding-right: 14px; }
+th.r + th, td.r + td { padding-left: 0; }
+dl.kv { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; font-size: 13px; }
+dl.kv dt { color: var(--ink-2); }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 18px; align-items: end; }
+.fields .grow2 { grid-column: span 2; }
+.fields > div { align-self: end; }
+.tscroll { overflow-x: auto; }
+.tscroll > table { min-width: 40em; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.cols.three { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
+.doc { font: 15.5px/1.62 var(--f-doc); max-width: 68ch; color: #1f2421; }
+.doc p + p { margin-top: .7em; }
+.steps { counter-reset: st; list-style: none; margin: 15px 0 0; padding: 0; max-width: 68ch; }
+.steps li { counter-increment: st; position: relative; padding-left: 27px; margin-bottom: 11px; font: 15px/1.6 var(--f-doc); }
+.steps li::before {
+  content: counter(st); position: absolute; left: 0; top: 2px;
+  font: 500 12px/1.7 var(--f-mono); color: var(--ink-3);
+}
+.steps .cmd { display: block; margin: 5px 0 3px; padding: 3px 7px; }
+code { font: 12.5px/1.5 var(--f-mono); white-space: nowrap; background: var(--board); border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
+ul.plain { list-style: none; margin: 0; padding: 0; }
+details { border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper-hi); padding: 0; }
+details > summary {
+  cursor: pointer; padding: 6px 10px; font-size: 12px; color: var(--ink-2);
+  list-style: none; display: flex; gap: 8px; align-items: baseline;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "+"; font: 13px/1 var(--f-mono); color: var(--ink-3); }
+details[open] > summary::before { content: "−"; }
+details > div { padding: 2px 10px 10px; border-top: 1px solid var(--rule); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin-bottom: 14px; }
+.toolbar .field label { font-size: 11.5px; color: var(--ink-2); }
+.toolbar .grow { flex: 1; }
+.hidden { display: none; }
+
+/* the case split */
+.casework { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+@media (min-width: 1500px) {
+  /* the queue needs ~730px of its own before it starts hiding columns */
+  .casework.split { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+}
+.open-case { container-type: inline-size; }
+@media (min-width: 1500px) {
+  .open-case { position: sticky; top: 22px; }
+}
+.exhibit { border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper-hi); margin-bottom: 10px; }
+.exhibit > header { display: flex; align-items: baseline; gap: 10px; padding: 9px 11px 7px; border-bottom: 1px solid var(--rule); }
+.exhibit > header .no { font: 500 11px/1.4 var(--f-mono); color: var(--ink-3); letter-spacing: .04em; }
+.exhibit > header h4 { font: 600 14px/1.3 var(--f-doc); min-width: 0; overflow-wrap: anywhere; }
+.exhibit > header .r { margin-left: auto; font: 11.5px/1.4 var(--f-mono); color: var(--ink-3); white-space: nowrap; }
+.exhibit .body { padding: 9px 11px 11px; }
+.exhibit ul { margin: 8px 0 0; padding-left: 17px; }
+.exhibit ul li { margin: 3px 0; font-size: 13px; color: var(--ink-2); }
+.artifacts { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.artifact { border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper-hi); padding: 8px; margin: 0; }
+.artifact figcaption { display: flex; gap: 8px; align-items: baseline; font-size: 12px; margin-bottom: 6px; }
+.artifact figcaption .no { font: 500 11px/1.4 var(--f-mono); color: var(--ink-3); }
+.artifact .mat { display: block; background: #101210; border-radius: 2px; padding: 6px; }
+.artifact img { display: block; width: 100%; height: auto; background: #101210; }
+.artifact .name { font: 11px/1.4 var(--f-mono); color: var(--ink-3); margin-top: 5px; word-break: break-all; }
+
+/* proof header */
+.proof { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
+.proof .mark { display: grid; justify-items: center; gap: 2px; border: 2px solid currentColor; border-radius: 2px; padding: 8px 16px; }
+.proof .mark.verified { color: var(--low); border-color: var(--low); }
+.proof .mark.broken { color: var(--critical); background: #f8edeb; }
+.proof .mark strong { font: 700 13px/1.2 var(--f-doc); letter-spacing: .14em; text-transform: uppercase; }
+.proof .mark span { font: 10.5px/1.3 var(--f-chrome); color: var(--ink-2); letter-spacing: .01em; }
+
+/* overlays */
+dialog {
+  border: 1px solid var(--rule-hi); border-radius: var(--r); background: var(--paper);
+  padding: 0; max-width: 34em; width: calc(100% - 32px); color: var(--ink);
+  box-shadow: 0 18px 44px rgba(23, 27, 25, .28);
+}
+dialog::backdrop { background: rgba(23, 27, 25, .42); }
+dialog > form { padding: 18px 20px; }
+dialog h3 { font: 600 16px/1.3 var(--f-doc); margin-bottom: 8px; }
+dialog p { font-size: 13px; color: var(--ink-2); }
+dialog .secret {
+  display: block; width: 100%; margin: 12px 0; padding: 10px 12px; font: 13px/1.5 var(--f-mono);
+  background: var(--paper-hi); border: 1px solid var(--rule-hi); border-radius: var(--r);
+  color: var(--ink); word-break: break-all;
+}
+dialog .actions { display: flex; gap: 10px; align-items: center; }
+#toast {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) translateY(14px);
+  background: #222724; color: #f0f2ee; border-radius: var(--r); padding: 9px 16px; font-size: 13px;
+  opacity: 0; pointer-events: none; transition: opacity .16s ease, transform .16s ease;
+  box-shadow: 0 8px 22px rgba(23, 27, 25, .3); z-index: 40;
+}
+#toast[data-open="1"] { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 760px) {
+  .fields { grid-template-columns: minmax(0, 1fr); }
+  .fields .grow2 { grid-column: auto; }
+  body { grid-template-columns: minmax(0, 1fr); }
+  .rail { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--rule-hi); }
+  .rail nav { padding: 6px 0 10px; }
+  .rail .connect { border-top: 0; margin-top: 0; }
+  main { padding: 20px 16px 70px; }
+  .strip > div { flex: 1 1 45%; border-left: 0; border-top: 1px solid var(--rule); }
+  .strip > div:first-child, .strip > div:nth-child(2) { border-top: 0; }
+  .proof { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: .001s !important; animation-duration: .001s !important; }
+  .skip:focus { top: 12px; }
+  html { scroll-behavior: auto; }
+}
+@media print {
+  .rail, #toast, .toolbar .btn { display: none; }
+  body { grid-template-columns: minmax(0, 1fr); background: #fff; }
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>◈ Synth<span>Verify</span> Console</h1>
-  <div class="spacer"></div>
-  <input id="apiKey" type="password" placeholder="API key (sv_live_…)">
-  <button onclick="saveKey()">Connect</button>
-</header>
-<nav>
-  <button data-tab="overview" class="active">Overview *</button>
-  <button data-tab="jobs">Verification Jobs</button>
-  <button data-tab="keys">API Keys *</button>
-  <button data-tab="webhooks">Webhooks *</button>
-  <button data-tab="audit">Audit Ledger *</button>
-</nav>
-<p class="muted" style="margin:10px 16px 0">* reads the platform control plane (<code>/api/v1/admin/**</code>), so it needs the
-operator's platform-scoped key. Verification Jobs runs on any organisation's own key and shows only
-that organisation's queue.</p>
-<main>
-  <section id="tab-overview"></section>
-  <section id="tab-jobs" class="hidden"></section>
-  <section id="tab-keys" class="hidden"></section>
-  <section id="tab-webhooks" class="hidden"></section>
-  <section id="tab-audit" class="hidden"></section>
+<a class="skip" href="#main">Skip to the working area</a>
+
+<aside class="rail">
+  <div class="wordmark">
+    <p class="brand">SynthVerify</p>
+    <h1>OPERATOR CONSOLE</h1>
+    <p class="pitch">Checks whether a file was made by a machine or edited after the fact, and
+    shows the evidence behind every verdict.</p>
+  </div>
+  <nav aria-label="Console sections">
+    <p id="g-check">Do a check</p>
+    <div role="tablist" aria-orientation="vertical" aria-labelledby="g-check">
+      <button class="tab primary" role="tab" id="t-check" data-tab="check" aria-controls="tab-check">Check a file<span class="ind" data-ind="check"></span></button>
+    </div>
+    <p id="g-records">Records</p>
+    <div role="tablist" aria-orientation="vertical" aria-labelledby="g-records" id="tablist">
+      <button class="tab" role="tab" id="t-overview" data-tab="overview" aria-controls="tab-overview">Platform overview<span class="ind" data-ind="overview"></span></button>
+      <button class="tab" role="tab" id="t-jobs" data-tab="jobs" aria-controls="tab-jobs">Verification queue<span class="ind" data-ind="jobs"></span></button>
+      <button class="tab" role="tab" id="t-keys" data-tab="keys" aria-controls="tab-keys">Credentials<span class="ind" data-ind="keys"></span></button>
+      <button class="tab" role="tab" id="t-webhooks" data-tab="webhooks" aria-controls="tab-webhooks">Workflow callbacks<span class="ind" data-ind="webhooks"></span></button>
+      <button class="tab" role="tab" id="t-audit" data-tab="audit" aria-controls="tab-audit">Audit ledger<span class="ind" data-ind="audit"></span></button>
+    </div>
+  </nav>
+  <div class="connect">
+    <label for="apiKey">Sign requests with an API key</label>
+    <div class="keyrow">
+      <input id="apiKey" type="password" name="api-key" placeholder="sv_live_…" spellcheck="false"
+             autocomplete="off" autocapitalize="none" aria-describedby="keyHelp">
+      <button class="btn go" id="connectBtn" type="button">Connect</button>
+    </div>
+    <p class="faint" id="keyHelp" style="font-size:11.5px;margin-top:8px">The key this server minted on
+      first boot, at <code>data/bootstrap_admin_key.txt</code>. Nothing is stored here but the prefix.</p>
+    <p class="faint" id="keyState" style="font-size:11.5px;margin-top:8px">Paste it, then Connect.</p>
+  </div>
+  <p class="foot">Platform overview, credentials, workflow callbacks and the audit ledger read the
+    control plane at <code>/api/v1/admin/**</code>, so they need a key with
+    <code>platform_scope</code>. The queue runs on any organisation's own key and shows only that
+    organisation's jobs.</p>
+</aside>
+
+<main id="main">
+  <section id="tab-check" role="tabpanel" aria-labelledby="t-check" tabindex="-1"></section>
+  <section id="tab-overview" role="tabpanel" aria-labelledby="t-overview" tabindex="-1" class="hidden"></section>
+  <section id="tab-jobs" role="tabpanel" aria-labelledby="t-jobs" tabindex="-1" class="hidden"></section>
+  <section id="tab-keys" role="tabpanel" aria-labelledby="t-keys" tabindex="-1" class="hidden"></section>
+  <section id="tab-webhooks" role="tabpanel" aria-labelledby="t-webhooks" tabindex="-1" class="hidden"></section>
+  <section id="tab-audit" role="tabpanel" aria-labelledby="t-audit" tabindex="-1" class="hidden"></section>
 </main>
-<div id="toast"></div>
+
+<dialog id="secret">
+  <form method="dialog">
+    <h3 id="secretTitle">Copy the secret now</h3>
+    <p id="secretNote">The platform stores only a hash of this value. It cannot be shown again.</p>
+    <code class="secret" id="secretValue"></code>
+    <div class="actions">
+      <button class="btn go" type="button" id="copySecret">Copy to clipboard</button>
+      <button class="btn" value="close">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<p class="sr" id="live" role="status" aria-live="polite"></p>
+
 <script>
-const $ = (s, el=document) => el.querySelector(s);
-let tab = 'overview';
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const TABS = ['check', 'overview', 'jobs', 'keys', 'webhooks', 'audit'];
+const TITLES = {
+  check: ['Check a file', 'Send one image, audio clip, video or document and read the verdict with the evidence behind it.'],
+  overview: ['Platform overview', 'What this deployment has checked, how risky the results were, and where each verdict was sent.'],
+  jobs: ['Verification queue', 'Every file submitted here, newest first. Open one to read its verdict and the evidence behind it.'],
+  keys: ['Credentials', 'The keys other systems use to call this deployment, and what each one is allowed to see.'],
+  webhooks: ['Workflow callbacks', 'Where finished verdicts are sent automatically, and whether each delivery arrived.'],
+  audit: ['Audit ledger', 'An unerasable record of every action taken here. Each row is hashed against the row before it.'],
+};
+const state = { tab: 'check', filters: { status: '', tier: '', media: '' }, offset: 0, limit: 25, caseId: null };
 
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
-  tab = b.dataset.tab;
-  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
-  ['overview','jobs','keys','webhooks','audit'].forEach(t => $('#tab-'+t).classList.toggle('hidden', t !== tab));
-  render();
-});
-
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display='block'; setTimeout(()=>t.style.display='none', 2600); }
-function saveKey() { localStorage.setItem('sv_key', $('#apiKey').value.trim()); toast('API key saved locally'); render(); }
 const KEY = () => localStorage.getItem('sv_key') || '';
-async function api(path, opts={}) {
-  const resp = await fetch(path, {...opts, headers: {'X-API-Key': KEY(), 'Content-Type':'application/json', ...(opts.headers||{})}});
-  if (!resp.ok) { const body = await resp.json().catch(()=>({})); throw new Error(body.detail || body.error || resp.status); }
+const setKey = (v) => (v ? localStorage.setItem('sv_key', v) : localStorage.removeItem('sv_key'));
+
+function esc(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+const DASH = '—';
+function num(value, digits = 3) {
+  return typeof value === 'number' && isFinite(value) ? value.toFixed(digits) : DASH;
+}
+function bytes(n) {
+  if (typeof n !== 'number' || !isFinite(n)) return DASH;
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n / 1024).toFixed(1)} KiB`;
+  return `${(n / 1048576).toFixed(2)} MiB`;
+}
+const tsFull = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
+const tsCell = new Intl.DateTimeFormat(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function ts(iso) {
+  if (!iso) return DASH;
+  const d = new Date(iso);
+  if (isNaN(d)) return esc(iso);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  const fmt = sameYear ? tsCell : tsFull;
+  return `<span class="ts" title="${esc(iso)}">${esc(fmt.format(d))}</span>`;
+}
+function ago(iso) {
+  if (!iso) return 'never';
+  const d = new Date(iso);
+  if (isNaN(d)) return 'unknown';
+  const s = Math.max(0, (Date.now() - d.getTime()) / 1000);
+  if (s < 60) return 'under a minute ago';
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} d ago`;
+}
+const prefix = (v, n = 8) => esc(String(v || '').slice(0, n)) + '…';
+const tag = (text, cls) => `<span class="tag ${cls}">${esc(text)}</span>`;
+const tierTag = (t) => (t ? tag(t, `t-${t}`) : tag('unscored', 's-queued'));
+const statusTag = (s) => (s ? tag(s, `s-${s}`) : tag('unknown', 's-queued'));
+
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.dataset.open = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.dataset.open = '0'; }, 3200);
+}
+function announce(msg) { $('#live').textContent = msg; }
+const mount = () => $(`#tab-${state.tab} .mount`);
+
+class ApiError extends Error {
+  constructor(status, detail) { super(detail); this.status = status; }
+}
+async function api(path, opts = {}) {
+  const resp = await fetch(path, {
+    ...opts,
+    headers: { 'X-API-Key': KEY(), 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new ApiError(resp.status, body.detail || body.error || `${resp.status} ${resp.statusText}`);
+  }
   return resp.json();
 }
-const tierBadge = t => t ? `<span class="badge b-${t}">${t}</span>` : '<span class="badge b-status">—</span>';
-const statusBadge = s => `<span class="badge b-status">${s}</span>`;
+
+/* ------------------------------------------------------------------ routing */
+function readHash() {
+  const raw = location.hash.replace(/^#\/?/, '');
+  const [tabPart, queryPart] = raw.split('?');
+  const tab = TABS.includes(tabPart) ? tabPart : 'check';
+  const q = new URLSearchParams(queryPart || '');
+  state.tab = tab;
+  state.filters.status = q.get('status') || '';
+  state.filters.tier = q.get('tier') || '';
+  state.filters.media = q.get('media') || '';
+  state.offset = Math.max(0, parseInt(q.get('offset') || '0', 10) || 0);
+  state.caseId = q.get('case') || null;
+  return q;
+}
+function writeHash(patch = {}) {
+  const q = new URLSearchParams();
+  const next = { ...state.filters, offset: state.offset, case: state.caseId, ...patch };
+  Object.entries(next).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) q.set(k, v); });
+  const s = q.toString();
+  const target = `#/${state.tab}${s ? `?${s}` : ''}`;
+  if (target !== location.hash) location.hash = target;
+}
+function paintTabs() {
+  $$('.tab').forEach((b) => {
+    const on = b.dataset.tab === state.tab;
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    b.tabIndex = on ? 0 : -1;
+    $(`#tab-${b.dataset.tab}`).classList.toggle('hidden', !on);
+  });
+  const [title, blurb] = TITLES[state.tab];
+  $(`#tab-${state.tab}`).innerHTML = `
+    <div class="crumb"><h2>${esc(title)}</h2><p class="sub">${esc(blurb)}</p></div>
+    <div class="mount"></div>`;
+}
+function indicator(tab, text) {
+  const el = $(`.tab[data-tab="${tab}"] .ind`);
+  if (el) el.textContent = text || '';
+}
 
 async function render() {
-  if (!KEY()) { $('#tab-'+tab).innerHTML = '<div class="panel">Paste an API key above to connect. Any organisation key fills this table; the tabs marked * need the platform key.</div>'; return; }
+  paintTabs();
+  TABS.forEach((t) => indicator(t, ''));
+  if (!KEY()) {
+    mount().innerHTML = `<div class="sheet">
+      <h3>Start here</h3>
+      <p class="doc">This console checks whether a file was made by a camera or microphone, or built and
+      edited afterwards. It reads and posts through the API over HTTP, and the API answers only a request
+      that carries a key — the same credential any calling system sends.</p>
+      <ol class="steps">
+        <li><span>Copy the key this server wrote when it first booted.</span>
+          <code class="cmd">cat data/bootstrap_admin_key.txt</code>
+          <span class="faint">Run <code>make doctor</code> if you moved the data directory.</span></li>
+        <li><span>Paste it into the field on the left, then choose Connect.</span></li>
+        <li><span>Open <em>Check a file</em> and pick something to verify.</span></li>
+      </ol>
+      <p style="margin-top:14px"><button class="btn go" type="button" id="focusKey">Go to the key field</button></p>
+    </div>`;
+    $('#focusKey').onclick = () => $('#apiKey').focus();
+    $('#keyState').textContent = 'Paste it, then Connect.';
+    return;
+  }
+  mount().innerHTML = '<p class="sub">Reading…</p>';
+  const fn = { check: renderCheck, overview: renderOverview, jobs: renderJobs, keys: renderKeys, webhooks: renderWebhooks, audit: renderAudit }[state.tab];
   try {
-    if (tab==='overview') await renderOverview();
-    if (tab==='jobs') await renderJobs();
-    if (tab==='keys') await renderKeys();
-    if (tab==='webhooks') await renderWebhooks();
-    if (tab==='audit') await renderAudit();
-  } catch (e) { $('#tab-'+tab).innerHTML = `<div class="panel">⚠ ${e.message}</div>`; }
+    await fn();
+  } catch (e) {
+    mount().innerHTML = errorSheet(e);
+    announce('Could not load this section.');
+  }
+}
+function errorSheet(e) {
+  if (e instanceof ApiError && e.status === 403) {
+    return `<div class="sheet"><h3>This key cannot open the control plane</h3>
+      <p class="doc">${esc(e.message)}</p>
+      <p style="margin-top:10px">Switch to a key created with <code>platform_scope</code> — the
+      bootstrap key in <code>data/bootstrap_admin_key.txt</code> is one — or use the
+      <button class="bare" type="button" onclick="go('jobs')">verification queue</button>, which an
+      organisation key can read.</p></div>`;
+  }
+  if (e instanceof ApiError && e.status === 401) {
+    return `<div class="sheet"><h3>The key was refused</h3>
+      <p class="doc">${esc(e.message)}</p>
+      <p style="margin-top:10px">A revoked or mistyped key gets you here. Re-paste it in the field on
+      the left, then choose Connect.</p></div>`;
+  }
+  return `<div class="sheet"><h3>Reading stopped</h3>
+    <p class="doc">${esc(e.message || String(e))}</p>
+    <p style="margin-top:10px">Check that the server is up with <code>curl localhost:8080/healthz</code>,
+    then <button class="bare" type="button" onclick="render()">try again</button>.</p></div>`;
 }
 
+function go(tab, patch) {
+  state.tab = tab;
+  writeHash(patch || {});
+  render();
+}
+$$('.tab').forEach((b) => {
+  b.addEventListener('click', () => { state.caseId = null; go(b.dataset.tab, { offset: '' }); });
+});
+$('.rail nav').addEventListener('keydown', (e) => {
+  const keys = ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft', 'Home', 'End'];
+  if (!keys.includes(e.key)) return;
+  e.preventDefault();
+  const items = $$('.tab');
+  const cur = items.findIndex((x) => x === document.activeElement);
+  let next = cur;
+  if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = items.length - 1;
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (cur + 1) % items.length;
+  else next = (cur - 1 + items.length) % items.length;
+  items[next].focus();
+  go(items[next].dataset.tab, { offset: '' });
+});
+
+/* ------------------------------------------------------------------- check */
+async function postFile(file) {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  // No Content-Type here: the browser must set the multipart boundary itself.
+  const resp = await fetch('/api/v1/media/analyze', { method: 'POST', headers: { 'X-API-Key': KEY() }, body: form });
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const detail = typeof body.detail === 'string' ? body.detail : `${resp.status} ${resp.statusText}`;
+    throw new ApiError(resp.status, detail);
+  }
+  return body;
+}
+function toLiveCase(r, name) {
+  const v = r.verdict || {};
+  const m = r.media || {};
+  return {
+    job_id: m.filename || name, heading: 'Live check',
+    status: 'completed', result: r,
+    risk_score: v.risk_score, risk_tier: v.risk_tier, confidence: v.confidence,
+    detector_coverage: v.detector_coverage, created_at: r.generated_at,
+    media: { filename: m.filename || name, mime_type: m.media_type, sha256: m.sha256, size_bytes: m.size_bytes },
+  };
+}
+async function renderCheck() {
+  mount().innerHTML = `<div class="sheet">
+    <h3>What this does</h3>
+    <p class="doc">The file is read by this browser, sent to this deployment over localhost or your own
+    network, and checked on the spot. It does not go to any outside service, and it is not stored — the
+    verdict is written to the audit ledger, but the file itself is not kept and never appears in the
+    queue. For that, call <code>/api/v1/media/ingest</code> the way a workflow integration would.</p>
+    <label class="drop" id="drop" tabindex="0">
+      <input type="file" id="pickFile" class="sr" aria-label="Choose a file to check">
+      <span class="drop-main">Choose a file to check</span>
+      <span class="faint">image, audio, video or text · or drop it here</span>
+    </label>
+    <div id="checkOut"></div>
+  </div>`;
+  const drop = $('#drop'), out = $('#checkOut');
+  const run = async (file) => {
+    if (!file) return;
+    drop.classList.remove('over');
+    out.innerHTML = `<p class="sub">Checking ${esc(file.name)} — running the detectors…</p>`;
+    announce('Checking file.');
+    try {
+      const r = await postFile(file);
+      out.innerHTML = caseSheet(toLiveCase(r, file.name)) + `<p class="sub caveat">
+        These are classical signal checks, not a trained model, so a high score is a strong flag rather
+        than proof. Read the exhibits before acting; where coverage or confidence is low the engine
+        refuses to conclude and asks for a human.</p>`;
+      indicator('check', `${(r.verdict || {}).recommended_action || 'done'}`);
+      announce('Check finished.');
+      $('#caseHeading')?.scrollIntoView({ block: 'start' });
+    } catch (e) {
+      out.innerHTML = `<p class="sub">${tag('Could not check this file', 's-failed')}</p>
+        <p class="doc">${esc(e instanceof ApiError ? e.message : String(e))}</p>`;
+      announce('Check failed.');
+    }
+  };
+  $('#pickFile').addEventListener('change', (e) => run(e.target.files[0]));
+  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#pickFile').click(); } });
+  ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (e) => run([...(e.dataTransfer?.files || [])][0]));
+  indicator('check', 'ready');
+}
+
+/* ---------------------------------------------------------------- overview */
 async function renderOverview() {
-  const s = await api('/api/v1/admin/stats');
-  const tierCards = ['LOW','MEDIUM','HIGH','CRITICAL'].map(t =>
-    `<div class="card"><div class="k">${t}</div><div class="v t-${t}">${s.jobs_by_risk_tier[t]||0}</div></div>`).join('');
-  $('#tab-overview').innerHTML = `
-    <div class="cards">
-      <div class="card"><div class="k">Completed</div><div class="v">${s.jobs_by_status.completed||0}</div></div>
-      <div class="card"><div class="k">Queued</div><div class="v">${s.jobs_by_status.queued||0}</div></div>
-      <div class="card"><div class="k">Failed</div><div class="v">${s.jobs_by_status.failed||0}</div></div>
-      <div class="card"><div class="k">Queue depth</div><div class="v">${s.queue_depth}</div></div>
-      <div class="card"><div class="k">Avg pipeline</div><div class="v">${s.avg_pipeline_ms||'—'}<small> ms</small></div></div>
-      <div class="card"><div class="k">Uptime</div><div class="v">${Math.round(s.uptime_seconds/60)}<small> min</small></div></div>
+  const [s, recent, hooks] = await Promise.all([
+    api('/api/v1/admin/stats'), api('/api/v1/jobs?limit=8').catch(() => null),
+    api('/api/v1/admin/webhooks').catch(() => null),
+  ]);
+  const statuses = ['completed', 'running', 'queued', 'failed'];
+  const totalJobs = statuses.reduce((a, k) => a + (s.jobs_by_status[k] || 0), 0);
+  const tiers = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+  const tierTotal = tiers.reduce((a, k) => a + (s.jobs_by_risk_tier[k] || 0), 0);
+  const actions = Object.entries(s.jobs_by_recommended_action || {});
+  const actionTotal = actions.reduce((a, [, c]) => a + c, 0) || 1;
+  const deliveries = Object.entries(s.webhook_deliveries_by_status || {});
+  indicator('overview', totalJobs ? `${totalJobs} jobs` : 'idle');
+
+  const stack = (rows, total) => `<div class="stack">${rows.map(([label, count, cls]) => `
+    <div class="row"><span>${esc(label)}</span>
+      <span class="meter ${cls || ''}"><i style="width:${total ? Math.max(1, (count / total) * 100).toFixed(1) : 0}%"></i></span>
+      <span class="val">${count}</span></div>`).join('')}</div>`;
+
+  mount().innerHTML = `
+    <dl class="strip">
+      <div><dt>Completed</dt><dd>${s.jobs_by_status.completed || 0}</dd></div>
+      <div><dt>Queued</dt><dd>${s.jobs_by_status.queued || 0}</dd></div>
+      <div><dt>Running</dt><dd>${s.jobs_by_status.running || 0}</dd></div>
+      <div><dt>Failed</dt><dd>${s.jobs_by_status.failed || 0}</dd></div>
+      <div><dt>Queue depth</dt><dd>${s.queue_depth}</dd></div>
+      <div><dt>Average pipeline</dt><dd>${s.avg_pipeline_ms ?? DASH}<small> ms</small></dd></div>
+      <div><dt>Uptime</dt><dd>${Math.round(s.uptime_seconds / 60)}<small> min</small></dd></div>
+    </dl>
+    <div class="cols three" style="margin-top:16px">
+      <div class="sheet"><h3>Risk tier of scored jobs</h3>
+        ${tierTotal ? stack(tiers.map((t) => [t, s.jobs_by_risk_tier[t] || 0, `t-${t}`]), tierTotal)
+          : '<p class="sub">No job has been scored yet. Open the queue to submit media.</p>'}
+        <p class="faint" style="font-size:12px;margin-top:10px">${tierTotal} of ${totalJobs} jobs carry a tier.</p>
+      </div>
+      <div class="sheet"><h3>Workflow action on recent completions</h3>
+        ${actions.length ? stack(actions.map(([a, c]) => [a, c, '']).sort((x, y) => y[1] - x[1]), actionTotal)
+          : '<p class="sub">Nothing has completed yet, so no action has been recommended.</p>'}
+        <p class="faint" style="font-size:12px;margin-top:10px">Counted over the last 200 completed jobs.</p>
+      </div>
+      <div class="sheet"><h3>Callback delivery</h3>
+        ${deliveries.length ? stack(deliveries.map(([st, c]) => [st, c, `s-${st}`]), deliveries.reduce((a, [, c]) => a + c, 0))
+          : '<p class="sub">No delivery has been attempted yet.</p>'}
+        <p class="faint" style="font-size:12px;margin-top:10px">${hooks && hooks.items.length
+          ? `${hooks.items.length} endpoint${hooks.items.length === 1 ? '' : 's'} registered; ${hooks.items.filter((w) => w.active).length} enabled.`
+          : 'Nothing is registered, so completion events go nowhere.'}</p>
+      </div>
     </div>
-    <h3 style="margin:6px 0 10px">Risk tier distribution</h3>
-    <div class="cards">${tierCards}</div>
-    <div class="panel"><h3>Workflow actions on recent completions</h3>
-      ${Object.entries(s.jobs_by_recommended_action).map(([a,c])=>`<div><b>${a}</b> — ${c}</div>`).join('') || '<span class="muted">No completed jobs yet.</span>'}
+    <div class="sheet" style="margin-top:16px"><h3>Newest records</h3>
+        ${recent && recent.items.length ? `<div class="tscroll"><table><thead><tr><th>Record</th><th>Media</th><th>Status</th><th class="r">Risk</th></tr></thead><tbody>
+          ${recent.items.map((j) => `<tr><td><a href="#/jobs?case=${esc(j.job_id)}">${prefix(j.job_id)}</a></td>
+            <td class="sub">${esc((j.media && j.media.filename) || DASH)}</td>
+            <td>${statusTag(j.status)}</td><td class="r num">${num(j.risk_score)}</td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="sub">No jobs on this deployment yet.</p>'}
     </div>`;
 }
 
-const jobFilters = { status: '', tier: '', media: '' };
-function setJobFilter(k, v) { jobFilters[k] = v; renderJobs(); }
-function resetJobFilters() { jobFilters.status = jobFilters.tier = jobFilters.media = ''; renderJobs(); }
+/* -------------------------------------------------------------------- jobs */
+function filterSelect(key, label, options) {
+  return `<span class="field"><label for="f-${key}">${esc(label)}</label>
+    <select id="f-${key}" data-filter="${key}">
+      <option value="">All</option>
+      ${options.map((o) => `<option value="${esc(o)}" ${state.filters[key] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+    </select></span>`;
+}
 
 async function renderJobs() {
-  const qs = new URLSearchParams({ limit: '50' });
-  if (jobFilters.status) qs.set('status', jobFilters.status);
-  if (jobFilters.tier) qs.set('risk_tier', jobFilters.tier);
-  if (jobFilters.media) qs.set('media_type', jobFilters.media);
-  const data = await api('/api/v1/jobs?' + qs);
-  const sel = (key, label, opts) => `
-    <select onchange="setJobFilter('${key}', this.value)">
-      <option value=''>${label}: all</option>
-      ${opts.map(o => `<option value="${o}" ${jobFilters[key]===o?'selected':''}>${o}</option>`).join('')}
-    </select>`;
-  $('#tab-jobs').innerHTML = `
-    <div class="panel" style="margin:0 0 14px">
-      <form class="inline" style="margin:0" onsubmit="event.preventDefault(); renderJobs()">
-        ${sel('status','Status',['queued','running','completed','failed'])}
-        ${sel('tier','Risk tier',['LOW','MEDIUM','HIGH','CRITICAL'])}
-        ${sel('media','Media type',['image','audio','video','text'])}
-        <button class="btn">Apply</button>
-        <button class="btn" type="button" onclick="resetJobFilters()">Reset</button>
-        <span class="muted" style="align-self:center">${data.total} matching job${data.total===1?'':'s'}</span>
-      </form>
-    </div>
-    <table><thead><tr><th>Job</th><th>File</th><th>Type</th><th>Status</th><th>Risk</th><th>Tier</th><th>Action</th><th>Created</th></tr></thead>
-    <tbody>${data.items.map(j => `<tr onclick="showJob('${j.job_id}')">
-      <td class="mono">${j.job_id.slice(0,8)}…</td>
-      <td>${(j.media&&j.media.filename)||'—'}</td>
-      <td class="muted">${(j.media&&j.media.media_type)||'—'}</td>
-      <td>${statusBadge(j.status)}</td>
-      <td>${j.risk_score!=null ? j.risk_score.toFixed(3) : '—'}</td>
-      <td>${tierBadge(j.risk_tier)}</td>
-      <td class="muted">${j.recommended_action || '—'}</td>
-      <td class="muted">${(j.created_at||'').slice(0,19).replace('T',' ')}</td>
-    </tr>`).join('')}</tbody></table>
-    <div id="jobDetail"></div>`;
-}
-
-const artifactUrls = [];
-async function imgAuth(el, url) {
-  // <img> can't send the X-API-Key header — fetch the bytes with auth and swap in a blob URL
-  const resp = await fetch(url, { headers: { 'X-API-Key': KEY() } });
-  if (!resp.ok) { el.closest('.art').innerHTML = '<span class="muted">⚠ artifact unavailable</span>'; return; }
-  const blobUrl = URL.createObjectURL(await resp.blob());
-  artifactUrls.push(blobUrl);
-  el.src = blobUrl;
-}
-
-async function showJob(id) {
-  artifactUrls.splice(0).forEach(u => URL.revokeObjectURL(u));
-  const j = await api('/api/v1/jobs/'+id);
-  const r = j.result || {};
-  const v = r.verdict || {};
-  const detHtml = (r.detectors||[]).map(d => `
-    <div class="det">
-      <div class="head"><b>${d.detector}</b><span class="mono muted">score ${d.score.toFixed(2)} · conf ${d.confidence.toFixed(2)} · ${d.status}</span></div>
-      <div class="bar"><div style="width:${(d.score*100).toFixed(0)}%"></div></div>
-      <ul class="findings">${(d.findings||[]).map(f=>`<li>${f}</li>`).join('')}</ul>
-    </div>`).join('');
-  $('#jobDetail').innerHTML = `
-    <div class="panel">
-      <h3>Job <span class="mono">${j.job_id}</span> ${tierBadge(j.risk_tier)} ${statusBadge(j.status)}</h3>
-      <div class="grid2">
-        <div>
-          <div class="score-donut" style="color:${j.risk_tier==='LOW'?'var(--low)':j.risk_tier==='MEDIUM'?'var(--medium)':j.risk_tier==='HIGH'?'var(--high)':'var(--critical)'}">
-            ${(j.risk_score??0).toFixed(3)}</div>
-          <div class="muted">fused risk score / 1.00 · confidence ${(j.confidence??0).toFixed(2)} · coverage ${((j.detector_coverage??0)*100).toFixed(0)}%
-            ${r.policy_name ? ` · policy <code>${r.policy_name}</code>` : ''}</div>
-          <p style="margin-top:10px"><b>${v.summary||''}</b></p>
-          <p class="muted" style="margin-top:6px">${(v.action_rationale||'')}</p>
-          <div style="margin-top:10px">${(r.flags||[]).map(f=>`<span class="flag" title="${(r.flag_explanations||{})[f]||''}">${f}</span>`).join('')}</div>
-          <h3 style="margin-top:16px">Narrative</h3>
-          ${(r.narrative||[]).map(p=>`<p class="muted" style="margin-bottom:8px">${p}</p>`).join('')}
-        </div>
-        <div>
-          <h3 style="margin-bottom:10px">Detector breakdown</h3>
-          ${detHtml || '<span class="muted">No report yet.</span>'}
-        </div>
+  const q = new URLSearchParams({ limit: String(state.limit), offset: String(state.offset) });
+  if (state.filters.status) q.set('status', state.filters.status);
+  if (state.filters.tier) q.set('risk_tier', state.filters.tier);
+  if (state.filters.media) q.set('media_type', state.filters.media);
+  const data = await api('/api/v1/jobs?' + q);
+  const from = data.total ? state.offset + 1 : 0;
+  const to = Math.min(state.offset + data.limit, data.total);
+  indicator('jobs', `${data.total}`);
+  const filtered = state.filters.status || state.filters.tier || state.filters.media;
+  mount().innerHTML = `
+    <form class="toolbar" id="filterForm">
+      ${filterSelect('status', 'Status', ['queued', 'running', 'completed', 'failed'])}
+      ${filterSelect('tier', 'Risk tier', ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])}
+      ${filterSelect('media', 'Media type', ['image', 'audio', 'video', 'text'])}
+      <button class="btn" type="submit">Apply</button>
+      ${filtered ? '<button class="btn" type="button" data-clear>Clear filters</button>' : ''}
+      <span class="grow meta" style="font-size:12.5px;color:var(--ink-2);align-self:center">
+        <span>${data.total ? `Showing ${from}–${to} of ${data.total}` : 'No records'}</span>
+        <span class="faint">Newest first</span>
+      </span>
+      <span style="display:flex;gap:8px;align-items:center">
+        <button class="btn" type="button" data-page="${Math.max(0, state.offset - data.limit)}" ${state.offset === 0 ? 'disabled' : ''}>Newer</button>
+        <button class="btn" type="button" data-page="${state.offset + data.limit}" ${to >= data.total ? 'disabled' : ''}>Older</button>
+      </span>
+    </form>
+    <div class="casework ${state.caseId ? 'split' : ''}">
+      <div>
+        <div class="tscroll"><table><caption>Queue</caption>
+        <thead><tr><th>Job</th><th>Media</th><th>Status</th><th class="r">Risk</th><th>Tier</th><th>Action</th><th>Created</th></tr></thead>
+        <tbody id="queueBody">${data.items.map(queueRow).join('') || `<tr><td colspan="7" class="sub">No job matches these filters. ${
+            filtered ? 'Clear them to read the whole queue.' : 'Submit media with POST /api/v1/media to start the queue.'
+          }</td></tr>`}</tbody></table></div>
       </div>
-      <div id="artifacts"></div>
+      <div class="open-case" id="casePanel">${state.caseId ? '' : `<div class="sheet">
+        <h3>No record open</h3>
+        <p class="doc">Choose a job to read its fused score, the exhibits behind it, and the policy
+        that turned those into an action. The link is shareable, so a colleague lands on the same record.</p>
+      </div>`}</div>
     </div>`;
-  $('#jobDetail').scrollIntoView({behavior:'smooth'});
+  $('#filterForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    state.offset = 0;
+    writeHash({ offset: '' });
+    render();
+  });
+  $$('[data-filter]').forEach((sel) => sel.addEventListener('change', () => {
+    state.filters[sel.dataset.filter] = sel.value;
+    state.offset = 0;
+    writeHash({ offset: '' });
+    render();
+  }));
+  const clear = $('[data-clear]');
+  if (clear) clear.onclick = () => {
+    state.filters = { status: '', tier: '', media: '' };
+    state.offset = 0;
+    writeHash({ status: '', tier: '', media: '', offset: '' });
+    render();
+  };
+  $$('[data-page]').forEach((b) => {
+    const off = Number(b.dataset.page);
+    if (off <= data.total) b.onclick = () => { state.offset = off; writeHash({}); render(); };
+  });
+  $$('#queueBody a[data-case]').forEach((a) => a.addEventListener('click', (e) => {
+    e.preventDefault();
+    openCase(a.dataset.case);
+  }));
+  if (state.caseId) await openCase(state.caseId, true);
+  announce(`${data.items.length} of ${data.total} jobs listed`);
+}
+
+function queueRow(j) {
+  const id = j.job_id;
+  const open = state.caseId === id;
+  const media = (j.media && j.media.filename) || 'unlinked media';
+  return `<tr ${open ? 'aria-current="true"' : ''}>
+    <td><a href="#/jobs?case=${esc(id)}" data-case="${esc(id)}" class="mono" title="${esc(id)}">${prefix(id, 6)}</a></td>
+    <td><span title="${esc(media)}">${esc(media)}</span>
+      <span class="meta faint" style="font-size:11.5px"><span>${esc((j.media && j.media.media_type) || DASH)}</span><span>${bytes((j.media || {}).size_bytes)}</span></span></td>
+    <td>${statusTag(j.status)}${j.attempts > 1 ? ` <span class="faint mono">×${j.attempts}</span>` : ''}</td>
+    <td class="r num">${num(j.risk_score)}</td>
+    <td>${tierTag(j.risk_tier)}</td>
+    <td class="sub">${esc(j.recommended_action) || DASH}</td>
+    <td>${ts(j.created_at)}</td>
+  </tr>`;
+}
+
+async function openCase(id, keepHash) {
+  state.caseId = id;
+  if (!keepHash) writeHash({});
+  $$('#queueBody a[data-case]').forEach((a) => {
+    const row = a.closest('tr');
+    if (row) row.setAttribute('aria-current', a.dataset.case === id ? 'true' : 'false');
+  });
+  $('.casework')?.classList.add('split');
+  const panel = $('#casePanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="sheet"><h3>Reading the record</h3><p class="sub">One moment.</p></div>';
+  const j = await api('/api/v1/jobs/' + encodeURIComponent(id));
+  panel.innerHTML = caseSheet(j);
+  if (window.matchMedia('(max-width: 1499px)').matches) panel.scrollIntoView({ block: 'start' });
+  panel.querySelector('h3')?.focus?.();
+  announce(`Opened job ${j.job_id}`);
   loadArtifacts(id);
 }
 
-async function loadArtifacts(id) {
-  const box = $('#artifacts');
-  let items = [];
-  try { items = (await api(`/api/v1/jobs/${id}/artifacts`)).items; } catch (e) { return; }
-  if (!box || !items.length) return;
-  box.innerHTML = `<h3 style="margin:18px 0 10px">Forensic artifacts</h3>
-    <div class="art-grid">${items.map(a => `
-      <div class="art">
-        <div class="cap"><b>${a.detector}</b><span class="muted mono">${a.name}</span></div>
-        <img alt="${a.name}">
-      </div>`).join('')}</div>`;
-  // an <img> with no src never fires `load`, so drive the authenticated fetch here
-  const imgs = box.querySelectorAll('.art img');
-  items.forEach((a, i) => { if (imgs[i]) imgAuth(imgs[i], a.url); });
+function caseSheet(j) {
+  const r = j.result || {};
+  const v = r.verdict || {};
+  const media = j.media || {};
+  const conclusive = v.conclusive;
+  const exhibits = (r.detectors || []).map((d, i) => exhibit(d, i)).join('');
+  const evidence = (r.top_evidence || []).map((e) => `<li>${esc(e)}</li>`).join('');
+  const flags = (r.flags || []).map((f) => `<span class="tag t-${v.risk_tier || 'CRITICAL'}" title="${esc((r.flag_explanations || {})[f] || '')}">${esc(f)}</span>`).join(' ');
+  const thresholds = r.policy ? Object.entries(r.policy) : [];
+  const thresholdRows = thresholds.map(([k, val]) => `<tr><td class="sub" style="width:12em">${esc(k)}</td><td class="num">${num(val, 3)}</td></tr>`).join('');
+  return `<div class="sheet">
+    <h3 id="caseHeading" tabindex="-1">${esc(j.heading || 'Record')} <span class="mono" style="font-size:13px">${esc(j.job_id)}</span></h3>
+    <div class="proof">
+      <div class="seal t-${esc(j.risk_tier || 'MEDIUM')}">
+        <span class="tier">${esc(j.risk_tier || 'unscored')}</span>
+        <span class="score">${num(j.risk_score)}</span>
+        <span class="of">fused risk / 1.00</span>
+      </div>
+      <dl class="kv">
+        <dt>Status</dt><dd>${statusTag(j.status)}${conclusive === undefined ? '' : ` ${conclusive ? tag('conclusive', 'ok') : tag('inconclusive', 's-queued')}`}</dd>
+        <dt>Action</dt><dd><strong>${esc(v.recommended_action) || DASH}</strong> <span class="sub">under policy <code>${esc(r.policy_name || 'defaults')}</code></span></dd>
+        <dt>Confidence</dt><dd class="mono">${num(j.confidence, 2)} <span class="faint">of 1.00</span></dd>
+        <dt>Detector coverage</dt><dd class="mono">${num((j.detector_coverage ?? 0) * 100, 0)}%</dd>
+        <dt>Pipeline</dt><dd class="mono">${num((r.pipeline || {}).duration_ms, 1)} ms</dd>
+        <dt>Report</dt><dd class="mono meta"><span>${esc(r.schema || 'no report')}</span><span>${ts(r.generated_at)}</span></dd>
+      </dl>
+    </div>
+    <p class="doc" style="margin-top:16px">${esc(v.summary) || 'No summary was recorded for this job.'}</p>
+    <p class="sub" style="margin-top:10px;max-width:68ch">${esc(v.action_rationale)}</p>
+    ${j.error ? `<p style="margin-top:12px">${tag('failed', 's-failed')} <span class="mono" style="font-size:12.5px">${esc(j.error)}</span></p>` : ''}
+    ${flags ? `<p style="margin-top:14px">${flags}</p>` : ''}
+    ${evidence ? `<div style="margin-top:14px"><h4 style="font-size:13px;margin-bottom:6px">Strongest evidence</h4>
+      <ul class="doc" style="margin:0;padding-left:19px">${evidence}</ul></div>` : ''}
+    ${(r.narrative || []).length ? `<div style="margin-top:16px"><h4 style="font-size:13px;margin-bottom:8px">Written opinion</h4>
+      <div class="doc">${r.narrative.map((p) => `<p>${esc(p)}</p>`).join('')}</div></div>` : ''}
+    <div style="margin-top:18px"><h4 style="font-size:13px;margin-bottom:8px">Exhibits
+      ${thresholds ? `<details style="display:inline-block;margin-left:8px;font-weight:400"><summary>policy thresholds</summary><div>
+        <table><tbody>${thresholdRows}</tbody></table></div></details>` : ''}</h4>
+      ${exhibits || '<p class="sub">No detector ran for this job.</p>'}
+    </div>
+    <div style="margin-top:18px"><h4 style="font-size:13px;margin-bottom:8px">Source media</h4>
+      <dl class="kv">
+        <dt>File</dt><dd>${esc(media.filename) || DASH} <span class="faint">(${esc(media.mime_type) || 'unknown type'}, ${bytes(media.size_bytes)})</span></dd>
+        <dt>Digest</dt><dd class="mono" style="word-break:break-all">${esc(media.sha256) || DASH}</dd>
+        ${j.organisation ? `<dt>Organisation</dt><dd>${esc(j.organisation)}</dd>` : ''}
+        <dt>Submitted</dt><dd>${ts(j.created_at)} <span class="faint">(${esc(ago(j.created_at))})</span></dd>
+        ${j.started_at ? `<dt>Started</dt><dd>${ts(j.started_at)}</dd>` : ''}
+        ${j.finished_at ? `<dt>Finished</dt><dd>${ts(j.finished_at)}</dd>` : ''}
+        ${j.trace_id ? `<dt>Trace</dt><dd class="mono">${esc(j.trace_id)}</dd>` : ''}
+      </dl>
+    </div>
+    <div id="artifacts" style="margin-top:18px"></div>
+  </div>`;
 }
 
+function exhibit(d, i) {
+  const evidence = Object.entries(d.evidence || {});
+  const metrics = evidence.filter(([, val]) => typeof val !== 'object').slice(0, 8);
+  return `<div class="exhibit">
+    <header>
+      <span class="no">E${i + 1}</span>
+      <h4>${esc(d.detector)}</h4>
+      <span class="r meta"><span>${esc(d.status)}</span><span>${num(d.runtime_ms, 1)} ms</span></span>
+    </header>
+    <div class="body">
+      <span class="meter t-${esc(tierFor(d.score))}" style="margin-bottom:8px"><i style="width:${(Math.max(0, Math.min(1, d.score)) * 100).toFixed(0)}%"></i></span>
+      <p class="faint mono meta" style="font-size:11.5px"><span>score ${num(d.score, 2)}</span><span>confidence ${num(d.confidence, 2)}</span><span>weighted ${num(d.weighted_score, 2)}</span></p>
+      ${(d.findings || []).length ? `<ul>${d.findings.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
+      ${d.skip_reason ? `<p class="sub" style="font-size:12.5px">Skipped: ${esc(d.skip_reason)}</p>` : ''}
+      ${d.error ? `<p style="font-size:12.5px;color:var(--critical)">${esc(d.error)}</p>` : ''}
+      ${(d.flags || []).length ? `<p style="margin-top:6px">${d.flags.map((f) => `<span class="tag">${esc(f)}</span>`).join(' ')}</p>` : ''}
+      ${metrics.length ? `<details style="margin-top:8px"><summary>Measurements</summary><div>
+        <table><tbody>${metrics.map(([k, val]) => `<tr><td class="sub" style="width:14em">${esc(k)}</td>
+          <td class="mono">${esc(typeof val === 'number' ? val.toFixed(4) : val)}</td></tr>`).join('')}</tbody></table>
+      </div></details>` : ''}
+    </div>
+  </div>`;
+}
+function tierFor(score) {
+  if (typeof score !== 'number') return 'MEDIUM';
+  if (score >= 0.85) return 'CRITICAL';
+  if (score >= 0.65) return 'HIGH';
+  if (score >= 0.35) return 'MEDIUM';
+  return 'LOW';
+}
+
+const blobUrls = new Set();
+async function loadArtifacts(id) {
+  let items = [];
+  try {
+    items = (await api(`/api/v1/jobs/${encodeURIComponent(id)}/artifacts`)).items;
+  } catch { return; }
+  const box = $(`#artifacts`);
+  if (!box || !items.length) {
+    if (box) box.innerHTML = `<h4 style="font-size:13px;margin-bottom:8px">Artifact images</h4>
+      <p class="sub">This record produced no rendered heatmap. Detectors that ran and did not emit an
+      image are still readable above.</p>`;
+    return;
+  }
+  blobUrls.forEach((u) => URL.revokeObjectURL(u));
+  blobUrls.clear();
+  box.innerHTML = `<h4 style="font-size:13px;margin-bottom:8px">Artifact images
+    <span class="faint" style="font-weight:400;font-size:11.5px">${items.length} ${items.length === 1 ? 'exhibit' : 'exhibits'}, served to this browser only</span></h4>
+    <div class="artifacts">${items.map((a) => `
+      <figure class="artifact">
+        <figcaption><span class="no">A${a.index + 1}</span><span>${esc(a.detector)}</span></figcaption>
+        <span class="mat"><img data-url="${esc(a.url)}" alt="${esc(a.name)} produced by ${esc(a.detector)} for this job"></span>
+        <span class="name">${esc(a.name)}</span>
+      </figure>`).join('')}</div>`;
+  // an <img> cannot send X-API-Key, so each image is fetched with the header and swapped for a blob URL
+  for (const img of $$('.artifact img', box)) {
+    try {
+      const resp = await fetch(img.dataset.url, { headers: { 'X-API-Key': KEY() } });
+      if (!resp.ok) throw new Error(String(resp.status));
+      const url = URL.createObjectURL(await resp.blob());
+      blobUrls.add(url);
+      img.src = url;
+    } catch {
+      img.closest('.artifact').querySelector('.mat').outerHTML =
+        '<p class="sub" style="font-size:12.5px">The artifact file is no longer on disk — retention may have swept it.</p>';
+    }
+  }
+}
+
+/* ------------------------------------------------------------------- keys */
 async function renderKeys() {
   const data = await api('/api/v1/admin/keys');
-  $('#tab-keys').innerHTML = `
-    <div class="panel">
-      <h3>Create API key</h3>
-      <form class="inline" onsubmit="createKey(event)">
-        <input name="name" placeholder="name" required>
-        <select name="role"><option>service</option><option>analyst</option><option>admin</option></select>
-        <input name="org" placeholder="organisation" value="default" style="width:140px">
-        <button class="btn primary">Create</button>
+  const active = data.items.filter((k) => k.active).length;
+  indicator('keys', `${active}/${data.items.length}`);
+  mount().innerHTML = `
+    <div class="sheet"><h3>Credential register</h3>
+      <div class="tscroll"><table><thead><tr><th>Key</th><th>Name</th><th>Role</th><th>Organisation</th><th>Scope</th><th>Used</th><th></th></tr></thead>
+        <tbody>${data.items.map((k) => `<tr>
+          <td class="mono">${esc(k.key_id)}</td>
+          <td>${esc(k.name)}</td>
+          <td>${tag(k.role, '')}</td>
+          <td class="sub">${esc(k.organisation)}</td>
+          <td>${k.platform_scope ? tag('platform', 't-CRITICAL') : '<span class="faint">own org</span>'}</td>
+          <td class="sub" title="${esc(k.last_used_at || 'never')}">${esc(ago(k.last_used_at))}</td>
+          <td class="r">${k.active
+            ? `<button class="btn warn" data-revoke="${esc(k.key_id)}">Revoke</button>`
+            : `<span class="faint">revoked ${ts(k.revoked_at)}</span>`}</td>
+        </tr>`).join('') || '<tr><td colspan="7" class="sub">No credentials exist.</td></tr>'}</tbody></table></div>
+    </div>
+    <div class="sheet"><h3>Mint a credential</h3>
+      <form id="keyForm" class="fields">
+        <span class="field"><label for="kName">Name</label>
+          <input id="kName" name="name" type="text" required maxlength="120" placeholder="newsroom-ingest" autocomplete="off"></span>
+        <span class="field"><label for="kRole">Role</label>
+          <select id="kRole" name="role"><option value="service">service — ingest only</option>
+            <option value="analyst">analyst — read queue and reports</option>
+            <option value="admin">admin — manage this organisation</option></select></span>
+        <span class="field"><label for="kOrg">Organisation</label>
+          <input id="kOrg" name="organisation" type="text" value="default" required maxlength="120"></span>
+        <span class="field"><label for="kScope">Reach</label>
+          <select id="kScope" name="platform_scope"><option value="false">own organisation only</option>
+            <option value="true">platform — every organisation</option></select>
+          <span class="faint" style="font-size:11.5px">A platform-scoped key needs the admin role.</span></span>
+        <span class="field"><label for="kRpm">Requests per minute (optional)</label>
+          <input id="kRpm" name="rate_limit_rpm" type="text" inputmode="numeric" placeholder="deployment default"></span>
+        <div><button class="btn go" type="submit">Mint credential</button></div>
       </form>
-      <table><thead><tr><th>Key ID</th><th>Name</th><th>Role</th><th>Org</th><th>Active</th><th>Last used</th><th></th></tr></thead>
-      <tbody>${data.items.map(k=>`<tr>
-        <td class="mono">${k.key_id}</td><td>${k.name}</td><td>${k.role}</td><td>${k.organisation}</td>
-        <td>${k.active?'✓':'revoked'}</td><td class="muted">${(k.last_used_at||'never').slice(0,19).replace('T',' ')}</td>
-        <td>${k.active?`<button class="btn danger" onclick="revokeKey('${k.key_id}')">Revoke</button>`:''}</td>
-      </tr>`).join('')}</tbody></table>
     </div>`;
+  $$('[data-revoke]').forEach((b) => arm(b, () => revokeKey(b.dataset.revoke)));
+  $('#keyForm').addEventListener('submit', createKey);
 }
 async function createKey(ev) {
   ev.preventDefault();
-  const f = ev.target;
-  const r = await api('/api/v1/admin/keys', {method:'POST', body: JSON.stringify({name:f.name.value, role:f.role.value, organisation:f.org.value})});
-  prompt('COPY THE SECRET NOW — shown only once:', r.key);
+  const btn = $('#keyForm button[type="submit"]');
+  btn.disabled = true;
+  btn.textContent = 'Minting…';
+  const body = {
+    name: $('#kName').value.trim(),
+    role: $('#kRole').value,
+    organisation: $('#kOrg').value.trim(),
+    platform_scope: $('#kScope').value === 'true',
+  };
+  const rpm = $('#kRpm').value.trim();
+  if (rpm) body.rate_limit_rpm = Number(rpm);
+  try {
+    const r = await api('/api/v1/admin/keys', { method: 'POST', body: JSON.stringify(body) });
+    revealSecret('Credential minted', r.key, 'Paste this into the calling service now. Only its hash is stored, so this screen cannot show it again.');
+    render();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Mint credential';
+  }
+}
+async function revokeKey(id) {
+  await api('/api/v1/admin/keys/' + encodeURIComponent(id), { method: 'DELETE' });
+  toast(`Revoked ${id}`);
+  announce(`Credential ${id} revoked`);
   render();
 }
-async function revokeKey(id) { await api('/api/v1/admin/keys/'+id, {method:'DELETE'}); toast('revoked'); render(); }
 
+/* --------------------------------------------------------------- webhooks */
 async function renderWebhooks() {
   const data = await api('/api/v1/admin/webhooks');
-  $('#tab-webhooks').innerHTML = `
-    <div class="panel">
-      <h3>Register webhook endpoint</h3>
-      <form class="inline" onsubmit="createHook(event)">
-        <input name="url" placeholder="https://workflow.corp/hooks/sv" required style="width:320px">
-        <input name="events" placeholder="job.completed" value="job.completed">
-        <input name="desc" placeholder="description">
-        <button class="btn primary">Register</button>
+  const liveCount = data.items.filter((w) => w.active).length;
+  indicator('webhooks', `${liveCount}/${data.items.length}`);
+  mount().innerHTML = `
+    <div class="sheet"><h3>Endpoints</h3>
+      <div class="tscroll"><table><thead><tr><th>Target</th><th>Events</th><th>Organisation</th><th>State</th><th></th></tr></thead>
+        <tbody>${data.items.map((w) => `<tr>
+          <td style="max-width:26em"><span class="mono" style="font-size:12.5px;word-break:break-all">${esc(w.url)}</span>
+            <div class="faint meta" style="font-size:11.5px"><span>${esc(w.description) || 'no description'}</span><span>added ${ts(w.created_at)}</span></div></td>
+          <td>${(w.events || []).map((e) => `<span class="tag">${esc(e)}</span>`).join(' ')}</td>
+          <td class="sub">${esc(w.organisation)}</td>
+          <td>${w.active ? tag('enabled', 'ok') : tag('disabled', 's-queued')}</td>
+          <td class="r" style="white-space:nowrap">
+            <button class="btn" data-test="${esc(w.id)}">Test</button>
+            <button class="btn" data-deliveries="${esc(w.id)}">History</button>
+            ${w.active ? `<button class="btn warn" data-disable="${esc(w.id)}">Disable</button>` : ''}
+          </td></tr>`).join('') || '<tr><td colspan="5" class="sub">No endpoint is registered, so job events go nowhere.</td></tr>'}
+        </tbody></table></div>
+        <p class="sub" style="margin-top:12px;font-size:12.5px">Every delivery carries
+          <code>X-SynthVerify-Signature: t=&lt;ts&gt;, v1=hmac_sha256(secret, "&lt;ts&gt;.&lt;body&gt;")</code>
+          so the receiver can prove the call came from here.</p>
+    </div>
+    <div class="sheet"><h3>Register an endpoint</h3>
+      <form id="hookForm" class="fields">
+        <span class="field grow2"><label for="wUrl">HTTPS endpoint</label>
+          <input id="wUrl" name="url" type="url" required placeholder="https://workflow.corp/hooks/synthverify" autocomplete="off"></span>
+        <span class="field"><label for="wEvents">Events, comma separated</label>
+          <input id="wEvents" name="events" type="text" value="job.completed" autocomplete="off"></span>
+        <span class="field"><label for="wDesc">What consumes it</label>
+          <input id="wDesc" name="description" type="text" maxlength="255" placeholder="claims desk intake"></span>
+        <div><button class="btn go" type="submit">Register endpoint</button></div>
       </form>
-      <p class="muted" style="margin-bottom:10px">Deliveries are signed: <code>X-SynthVerify-Signature: t=&lt;ts&gt;, v1=hmac_sha256(secret, "&lt;ts&gt;.&lt;body&gt;")</code></p>
-      <table><thead><tr><th>ID</th><th>URL</th><th>Events</th><th>Active</th><th></th></tr></thead>
-      <tbody>${data.items.map(w=>`<tr>
-        <td class="mono">${w.id.slice(0,8)}…</td><td>${w.url}</td><td class="muted">${(w.events||[]).join(', ')}</td>
-        <td>${w.active?'✓':'disabled'}</td>
-        <td>
-          <button class="btn" onclick="testHook('${w.id}')">Test</button>
-          <button class="btn" onclick="showDeliveries('${w.id}')">Deliveries</button>
-          <button class="btn danger" onclick="delHook('${w.id}')">Disable</button>
-        </td></tr>`).join('')}</tbody></table>
-      <div id="deliveries"></div>
-    </div>`;
+    </div>
+    <div id="deliveries"></div>`;
+  $$('[data-deliveries]').forEach((b) => { b.onclick = () => showDeliveries(b.dataset.deliveries); });
+  $$('[data-test]').forEach((b) => arm(b, () => testHook(b.dataset.test, b), { once: true }));
+  $$('[data-disable]').forEach((b) => arm(b, () => disableHook(b.dataset.disable, b)));
+  $('#hookForm').addEventListener('submit', createHook);
 }
 async function createHook(ev) {
   ev.preventDefault();
-  const f = ev.target;
-  const r = await api('/api/v1/admin/webhooks', {method:'POST', body: JSON.stringify({url:f.url.value, events:f.events.value.split(',').map(s=>s.trim()), description:f.desc.value})});
-  prompt('COPY THE SIGNING SECRET NOW:', r.secret);
+  const body = {
+    url: $('#wUrl').value.trim(),
+    events: $('#wEvents').value.split(',').map((x) => x.trim()).filter(Boolean),
+    description: $('#wDesc').value.trim(),
+  };
+  const btn = $('#hookForm button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const r = await api('/api/v1/admin/webhooks', { method: 'POST', body: JSON.stringify(body) });
+    revealSecret('Signing secret created', r.secret, 'Give this to the receiver so it can verify the signature header. It is not retrievable afterwards.');
+    render();
+  } finally {
+    btn.disabled = false;
+  }
+}
+async function disableHook(id) {
+  await api('/api/v1/admin/webhooks/' + encodeURIComponent(id), { method: 'DELETE' });
+  toast('Endpoint disabled');
   render();
 }
-async function delHook(id) { await api('/api/v1/admin/webhooks/'+id, {method:'DELETE'}); render(); }
-async function testHook(id) { const r = await api(`/api/v1/admin/webhooks/${id}/test`, {method:'POST'}); toast(r.delivered ? 'Test delivered ✓' : `Test failed: ${r.error||r.response_code}`); }
+async function testHook(id, btn) {
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = 'Sending…';
+  try {
+    const r = await api(`/api/v1/admin/webhooks/${encodeURIComponent(id)}/test`, { method: 'POST' });
+    toast(r.delivered ? 'Test delivered' : `Test failed: ${r.error || r.response_code}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
 async function showDeliveries(id) {
-  const d = await api(`/api/v1/admin/webhooks/${id}/deliveries`);
-  $('#deliveries').innerHTML = `<h3 style="margin-top:14px">Recent deliveries</h3>
-    <table><thead><tr><th>ID</th><th>Event</th><th>Status</th><th>Attempt</th><th>HTTP</th><th>Error</th></tr></thead>
-    <tbody>${d.items.map(x=>`<tr><td class="mono">${x.id.slice(0,8)}…</td><td>${x.event_type}</td>
-      <td>${statusBadge(x.status)}</td><td>${x.attempt}/${x.max_attempts}</td><td>${x.response_code??'—'}</td>
-      <td class="muted">${(x.error||'').slice(0,80)}</td></tr>`).join('')||'<tr><td colspan="6" class="muted">none</td></tr>'}</tbody></table>`;
+  const box = $('#deliveries');
+  const isOpen = box.dataset.for === id && !box.classList.contains('hidden');
+  if (isOpen) { box.innerHTML = ''; box.dataset.for = ''; box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  box.dataset.for = id;
+  box.innerHTML = '<p class="sub">Reading attempts…</p>';
+  const d = await api(`/api/v1/admin/webhooks/${encodeURIComponent(id)}/deliveries`);
+  box.innerHTML = `<div class="sheet"><h3>Delivery attempts <span class="faint" style="font-weight:400;font-size:12px">newest first</span></h3>
+    <div class="tscroll"><table><thead><tr><th>Event</th><th>Status</th><th>Try</th><th class="r">HTTP</th><th>Record</th><th>Detail</th></tr></thead>
+    <tbody>${d.items.map((x) => `<tr>
+      <td><span class="tag">${esc(x.event_type)}</span></td>
+      <td>${statusTag(x.status)}</td>
+      <td class="mono">${x.attempt}/${x.max_attempts}</td>
+      <td class="r mono">${x.response_code ?? DASH}</td>
+      <td>${x.job_id ? `<a href="#/jobs?case=${esc(x.job_id)}" class="mono">${prefix(x.job_id, 10)}</a>` : `<span class="faint">test call</span>`}</td>
+      <td class="sub mono" style="font-size:12px">${esc((x.error || '').slice(0, 90))}</td>
+    </tr>`).join('') || '<tr><td colspan="6" class="sub">Nothing has been delivered to this endpoint yet.</td></tr>'}</tbody></table></div></div>`;
+  $$('[data-case]', box).forEach((a) => a.addEventListener('click', (e) => {
+    e.preventDefault();
+    go('jobs', { case: a.dataset.case });
+  }));
 }
 
+/* ------------------------------------------------------------------ audit */
 async function renderAudit() {
-  const v = await api('/api/v1/admin/audit/verify');
-  const data = await api('/api/v1/admin/audit?limit=100');
-  $('#tab-audit').innerHTML = `
-    <div class="panel">
-      <h3>Hash chain: ${v.verified ? '<span style="color:var(--low)">VERIFIED ✓</span>' : '<span style="color:var(--critical)">TAMPERED</span>'}
-        <span class="muted" style="font-weight:400">(${v.entries_checked} entries)</span></h3>
-      <table><thead><tr><th>#</th><th>Time</th><th>Actor</th><th>Action</th><th>Resource</th><th>Entry hash</th></tr></thead>
-      <tbody>${data.items.map(e=>`<tr>
-        <td>${e.seq}</td><td class="muted">${(e.ts||'').slice(0,19).replace('T',' ')}</td>
-        <td>${e.actor}</td><td><code>${e.action}</code></td><td class="mono">${e.resource||''}</td>
-        <td class="mono muted">${e.entry_hash.slice(0,16)}…</td></tr>`).join('')}</tbody></table>
+  const [v, data] = await Promise.all([api('/api/v1/admin/audit/verify'), api('/api/v1/admin/audit?limit=100')]);
+  indicator('audit', v.verified ? 'verified' : 'BROKEN');
+  const unsealed = v.sealed_through ? (data.items.length ? data.items[0].seq - v.sealed_through : 0) : null;
+  mount().innerHTML = `
+    <div class="sheet">
+      <h3>Chain verification</h3>
+      <div class="proof">
+        <div class="mark ${v.verified ? 'verified' : 'broken'}">
+          <strong>${v.verified ? 'Verified' : 'Tampered'}</strong>
+          <span>${v.verified ? 'every hash recomputes' : 'the chain contradicts itself'}</span>
+        </div>
+        <dl class="kv">
+          <dt>Rows hashed</dt><dd class="mono">${v.entries_checked}</dd>
+          <dt>Sealed ranges checked</dt><dd class="mono">${v.checkpoints_checked}</dd>
+          <dt>Provable back to</dt><dd class="mono">${v.sealed_through ?? DASH}
+            <span class="faint">${unsealed === null ? '' : unsealed <= 0 ? 'Sealed at the head' : `${unsealed} rows appended since the last seal`}</span></dd>
+          <dt>Head hash</dt><dd class="mono" style="word-break:break-all">${esc(v.head_hash) || DASH}</dd>
+          <dt>Throughput</dt><dd class="mono meta"><span>${num(v.elapsed_ms, 1)} ms</span><span>${(v.events_per_second ?? 0).toLocaleString()} rows/s</span></dd>
+          ${v.verified ? '' : `<dt>First contradiction</dt><dd class="mono">seq ${v.break_at_seq ?? DASH} — ${esc(v.break_reason) || 'no reason recorded'}</dd>`}
+        </dl>
+      </div>
+      <p class="sub" style="margin-top:14px;font-size:12.5px;max-width:74ch">A seal does not let a
+      verifier skip work: each row is hashed and then compared with the range that closed over it, so
+      edited history fails on one side or the other. Rows past the last seal are hashed but not yet
+      provable against a seal — lower <code>SV_AUDIT_CHECKPOINT_EVERY</code> to shrink that window.</p>
+    </div>
+    <div class="sheet"><h3>Ledger <span class="faint" style="font-weight:400;font-size:12px">newest ${data.items.length} entries</span></h3>
+      <div class="tscroll"><table><thead><tr><th>Seq</th><th>Time</th><th>Actor</th><th>Action</th><th>Resource</th><th>This entry's hash</th></tr></thead>
+      <tbody>${data.items.map((e) => `<tr>
+        <td class="mono">${e.seq}</td>
+        <td>${ts(e.ts)}</td>
+        <td>${e.actor.startsWith('job:')
+          ? `<a href="#/jobs?case=${esc(e.actor.slice(4))}" data-case="${esc(e.actor.slice(4))}" class="mono">${prefix(e.actor.slice(4), 10)}</a>`
+          : `<span class="mono">${esc(e.actor)}</span>`}</td>
+        <td><span class="tag">${esc(e.action)}</span></td>
+        <td class="sub mono" style="font-size:12px">${esc(e.resource) || DASH}</td>
+        <td><details><summary class="mono">${prefix(e.entry_hash, 16)}</summary><div>
+          <dl class="kv"><dt>Entry</dt><dd class="mono" style="word-break:break-all">${esc(e.entry_hash)}</dd>
+            <dt>Previous</dt><dd class="mono" style="word-break:break-all">${esc(e.prev_hash) || 'chain root'}</dd>
+            <dt>Event id</dt><dd class="mono">${esc(e.event_id)}</dd>
+            ${e.trace_id ? `<dt>Trace</dt><dd class="mono">${esc(e.trace_id)}</dd>` : ''}
+            ${e.detail ? `<dt>Detail</dt><dd class="mono" style="word-break:break-all">${esc(JSON.stringify(e.detail))}</dd>` : ''}
+          </dl></div></details></td>
+      </tr>`).join('') || '<tr><td colspan="6" class="sub">The ledger is empty.</td></tr>'}</tbody></table></div>
     </div>`;
+  $$('[data-case]', mount()).forEach((a) => a.addEventListener('click', (e) => {
+    e.preventDefault();
+    go('jobs', { case: a.dataset.case });
+  }));
+  announce(`Chain ${v.verified ? 'verified' : 'broken'} over ${v.entries_checked} entries`);
 }
 
-window.onload = () => { $('#apiKey').value = KEY() || ''; render(); };
+/* ---------------------------------------------------------------- shared */
+function arm(btn, run, opts = {}) {
+  if (opts.once) { btn.onclick = () => run(); return; }
+  const label = btn.textContent;
+  let armed = false;
+  btn.onclick = () => {
+    if (!armed) {
+      armed = true;
+      btn.dataset.armed = '1';
+      btn.textContent = `Confirm ${label.toLowerCase()}`;
+      setTimeout(() => { if (armed) { armed = false; btn.dataset.armed = '0'; btn.textContent = label; } }, 6000);
+      return;
+    }
+    run();
+  };
+}
+function revealSecret(title, secret, note) {
+  $('#secretTitle').textContent = title;
+  $('#secretNote').textContent = note;
+  $('#secretValue').textContent = secret;
+  const dlg = $('#secret');
+  if (!dlg.open) dlg.showModal();
+  $('#copySecret').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(secret);
+      toast('Secret copied');
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents($('#secretValue'));
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      toast('Select the text and copy it');
+    }
+  };
+}
+
+/* ------------------------------------------------------------- bootstrap */
+function connect() {
+  const value = $('#apiKey').value.trim();
+  if (!value) {
+    setKey('');
+    $('#keyState').textContent = 'Nothing was pasted, so nothing can be read.';
+    render();
+    return;
+  }
+  setKey(value);
+  $('#keyState').textContent = 'Key kept in this browser only; every call sends it as X-API-Key.';
+  toast('Connected');
+  render();
+}
+$('#connectBtn').addEventListener('click', connect);
+$('#apiKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); connect(); } });
+
+window.addEventListener('hashchange', () => { readHash(); render(); });
+window.addEventListener('load', () => {
+  readHash();
+  const key = KEY();
+  if (key) {
+    $('#apiKey').value = key;
+    $('#keyState').textContent = 'Key kept in this browser only; every call sends it as X-API-Key.';
+  }
+  render();
+});
 </script>
 </body>
 </html>
