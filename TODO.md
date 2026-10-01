@@ -850,9 +850,12 @@ mutation check *before* implementation, and no box gets ticked without both havi
     and volume; under mutation A the same check fails on its own terms.
   - *Not claimed:* the Redis-backed broker `AC-INFRA-2` also names is not implemented — §4.3 makes the
     Postgres-only path first-class, so this run satisfies the requirement's intent and the Redis variant
-    stays openly unshipped (also tracked under T38's Valkey decision). And the `scale` CI job has never
-    run on hosted CI: this repo has no remote and nothing has been pushed, so that job is a definition
-    verified by executing its three steps locally, not a green tick from a pipeline.
+    stays openly unshipped (also tracked under T38's Valkey decision). And when this was written the
+    `scale` CI job had never run on hosted CI — no remote, nothing pushed — so it was a definition
+    verified by executing its three steps locally, not a green tick from a pipeline. It has now executed
+    on GitHub's runners and came back **red**, on `compose up --wait` asking a healthcheck of a worker
+    tier that deliberately has none; the fix and the outstanding re-run are in `CHANGELOG.md`, so this
+    is still not a green tick.
 - [x] **T40** *(scheduled by T37's own measurement, not by reading the spec)* Keep the audit chain a
   chain when more than one writer exists. `AuditLedger.append()` reads the current head and inserts a
   row pointing at it, with nothing between the two statements, so two committed transactions can both
@@ -2176,10 +2179,12 @@ or which classifier is finally chosen.
   - **Measured, not asserted.** `pytest tests/test_oidc.py tests/test_scopes.py` → **38 passed in 7.68 s**
     (23 OIDC + 15 scope). Declared-root/package recount from the *resolved* closure, not from a guess:
     `test_the_declared_root_count_matches_what_the_gates_print` now reads **22 declared roots → 52
-    packages**, the lock carries **53 pins**, and `MIT-0` was added to `ALLOWED_LICENSES` for `cffi`
+    packages**, the lock carries **53 pins** at that measurement — 54 on the tree that ships, the 54th being
+    `colorama` under **T61**, and `MIT-0` was added to `ALLOWED_LICENSES` for `cffi`
     (`types-PyYAML` is the 22nd root; PyJWT dedups across `[jwt]` and `dev`, so it adds one). The full
     SQLite leg through `.venv/bin/python`: **1023 tests → 1002 passed, 0 failed, 21 skipped in 163.8 s**
-    (the 21 skips are Postgres/Valkey-only, never silent under `-rs`).
+    (the 21 skips are Postgres/Valkey-only, never silent under `-rs`; the tree after T61 measures
+    **1026 → 1005 passed, 21 skipped in 165.2 s**).
   - **What is honestly not re-measured on this machine.** The Postgres suite leg and the two container
     legs (`make lock-e2e`, `make airgap`) are marked **RE-MEASURE PENDING** in README §2.5 — both services
     are down and the thermal budget says a doc pass is not worth spinning them up. The OIDC code path is
@@ -2232,6 +2237,50 @@ or which classifier is finally chosen.
     CLI leg covers the collision rather than only the unit leg. **Not in T58's scope on purpose:** the fix
     changes which rows a table *keeps*, which is a different claim from which rows a metric is allowed to
     read, and bundling them would make T58's acceptance record cover a movement it does not describe.
+- [x] **T61** **Make the first hosted CI run green — five environment claims that only a runner can
+    adjudicate.** `github.com/aashish254/synthverify` executed its first workflow on the push of `c2632ab`:
+    **19 jobs, 12 green, 7 red** (`gh run view 36869183171 --json jobs`). The 12 include the two
+    `test (3.11, sqlite|postgres)` legs and all three `macos-latest` portability legs, each printing
+    `1023 tests, 0 failures, 0 errors, 21 skipped` — the first time this suite ran anywhere but this laptop.
+    Each red is diagnosed from its own literal error, fixed at the cause, and recorded in `CHANGELOG.md`
+    under *Fixed — the first hosted CI run*:
+  - `docker` → `PermissionError: [Errno 13] Permission denied: '/work/evidence.jpg'`. The image runs as uid
+    10001; the host made the scratch mount 0755. Docker Desktop's remap hid this on every machine that had
+    ever run the gate.
+  - `scale` → `container …-worker2-1 has no healthcheck configured`. The worker tier has no probe on purpose
+    (no listening socket), and `compose up --wait` exits non-zero on that anyway; `--wait` is now asked only
+    of the API replicas, and `dump()` prints `ps --all` and the failing service list.
+  - `ledger` → `ModuleNotFoundError: No module named 'pg8000'`. The install step's *name* claimed the
+    product's driver; four other legs install the CI verifier driver, this one did not.
+  - `portability (windows-latest, ×3)` → `RESULT: FAIL (2 problem(s))` from the doctor, which surfaced only
+    the count. The two were `colorama: unpinned` and `uvloop: stale`, recovered by running the shipped
+    `check_lock` against a simulated win32 environment. Fixed structurally, not by a waiver: the FC-1
+    closure walk already reports every requirement line it declined to follow, so a pin that is inert on this
+    interpreter is exempt from *stale* **with its evidence printed**, and a pin no host walk can discover is
+    declared with its reason (`TARGET_PLATFORM_PINS` for the image's `greenlet`, the new
+    `MATRIX_PLATFORM_PINS` for a matrix platform's `colorama`). Neither is exempt from *absent*.
+  - `reproducible-image` → `FAIL … greenlet in host output: True`, 9/10. The anti-theatre arm asserted the
+    host must *not* see the platform pin — an Apple-Silicon-only truth. It now branches: where the host can
+    see it, the witness is that the image run grades a different closure (`34 from 13` vs `53 from 22`).
+  - **Graded on this tree:** `make lock-check` → `52 packages in the declared closure, 54 pinned … RESULT:
+    PASS`; simulated win32 → `51 closure, 54 pins, 0 issue(s)`; simulated linux → `52 closure, 54 pins,
+    0 issue(s)`; `tests/test_dependency_lock.py` + `tests/test_freedom_licenses.py` → **30 + 102 = 132
+    passed**, and the 21 documentation guards in `tests/test_release_hygiene.py` pass against the README and
+    CHANGELOG bytes this pass rewrote (junit for the three together: `tests=153 failures=0 errors=0
+    skipped=0` in 1.887 s); full SQLite leg
+    → **1026 tests, 1005 passed, 0 failed, 0 errors, 21 skipped in 165.2 s** (junit); ruff clean; mypy
+    `Success: no issues found in 73 source files`.
+  - **What T61 does not close:** it never *ran* the seven legs it fixes. The Docker daemon is down on this
+    box for thermal-budget reasons and there is no Windows interpreter here, so all seven re-appearances are
+    **T62**, and the Windows *suite* remains unexecuted at any size.
+- [ ] **T62** **Re-run the seven legs that T61 fixed, and let the numbers that come back overwrite the
+    `RE-MEASURE PENDING` rows.** `make airgap`, `make docker`, `make scale`, `make scale-mutations`,
+    `make ledger-postgres`, `make reproducible-image`/`make lock-e2e`, plus the Postgres+Valkey full-suite leg
+    and the two container portability legs at 1026 tests. Order matters for the thermal budget: the two
+    compose legs and `lock-e2e` are the ones holding the daemon down the longest, `lock-e2e` is two
+    `--no-cache` builds, and the Postgres leg wants the services up *after* the container legs have released
+    their ports. Where a leg is re-run, its row in README §2.5 carries the new print; where it is not, the
+    label stays rather than inheriting a number from a tree that no longer exists.
 
 
 

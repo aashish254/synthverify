@@ -438,14 +438,17 @@ decision, not a drift):
    so the claim under test is FC-4's actual wording ("complete a full ingest→verdict cycle with no
    outbound network access"), proven by `cli analyze` on a real file. The seal is verified before it is
    trusted (`socket.create_connection` to a public address must fail inside, and must succeed outside).
-6. **`AC-INFRA-1`'s "CI matrix" is satisfied by the matrix *definition* plus a local run of the same
-   command**, because this working copy has no remote and nothing has ever been pushed. The Postgres leg is
-   therefore executed here, against a real `postgres:16`, with its anti-degradation and cleanup gates run
-   verbatim from the workflow file — but "the hosted runner turned green" is a sentence this repo cannot
-   say, and does not say. Reading the clause as "must be proven by GitHub's hosted runners specifically"
-   would leave `AC-INFRA-1` open on an infrastructure fact rather than an engineering one, so the wording
-   adopted is: matrix defined and committed, whole suite green on both dialects locally, hosted execution
-   pending a push.
+6. **`AC-INFRA-1`'s "CI matrix" is now satisfied by hosted execution, with one leg still unproven.** The
+   repository has a remote and the workflow has run on GitHub's runners: `test (3.11, sqlite)` and
+   `test (3.11, postgres)` are both **green** there, and so are the three `macos-latest` portability legs,
+   each printing `1023 tests, 0 failures, 0 errors, 21 skipped` at that tree's size. Before the push this
+   clause rested on "matrix *definition* plus a local run of the same command", and the local run — whole
+   suite green on both dialects, with the anti-degradation and cleanup gates executed verbatim from the
+   workflow file — still stands behind it. What is *not* evidenced is Windows: those three legs died in the
+   environment doctor and never reached `pytest`, so the clause's "on every platform the metadata claims"
+   half is open until the next hosted run turns them green (the cause and the fix are in `CHANGELOG.md`;
+   nothing in `tests/` skips on `sys_platform`, so the 21-skip ceiling should hold there, and "should" is
+   not this clause's verb).
 7. **Every `REQ-*` in §4.3/§4.4 now has an `AC-*` partner, because a requirement without one cannot be
    closed.** §4.3 listed `REQ-INFRA-1..6` but defined only `AC-INFRA-1/2/4`, and §7's condition 3 then
    cited "AC-INFRA-1..4" — a range that named two ids that did not exist (`AC-INFRA-3`), skipped two
@@ -643,22 +646,42 @@ Landed and verified; commands and every printed count in README §2.5 and [`TODO
   entry the requested extra does not pull in is inert - which is what lets one file serve the image
   (`core,vision`), the dev environment and each CI profile without three of them drifting apart.
 * **The check** — `synthverify dependency-lock` (also chained into `synthverify freedom`, so `make freedom`
-  runs it): `52 packages in the declared closure, 53 pinned`, groups `core=11, dev=8, jwt=1, valkey=1, vision=2`,
+  runs it): `52 packages in the declared closure, 54 pinned`, groups `core=11, dev=8, jwt=1, valkey=1, vision=2`,
   `RESULT: PASS`. It compares the lock with **installed metadata** offline - the same closure walk FC-1 uses -
   and therefore fails in both directions: a closure member with no pin, a pin nothing depends on any more, a
   pin whose version differs from what is installed, and a lock line that is not a `name==version` pin at all.
-  Its 48th pin is `greenlet`, which is in the file for the image and not for the host that wrote it:
-  SQLAlchemy requires it only where its `platform_machine` marker is true, so the declaration lives in
-  `dependency_lock.TARGET_PLATFORM_PINS` with its reason, is exempt from *stale*, and is not exempt from
-  *absent* or from *disagreeing with the declaration*.
-* **The artifact-level proof** (`make lock-e2e`, `scripts/lock_e2e.py`): **10/10 checks PASS**, and the
+* **The closure is *this platform's*, so the *stale* direction needed a rule, not a waiver.** The first hosted
+  Windows run produced two findings that were both wrong: `colorama` "unpinned" (click and pytest require it
+  only on Windows, so a darwin-authored lock had never heard of it) and `uvloop` "stale" (uvicorn[standard]
+  requires it only *off* Windows, so on Windows it is in the file and in nobody's closure). Two answers, one
+  principle - the exemption must be evidenced and printed, never asserted:
+  - a pin some installed package *does* require, behind a marker this interpreter fails, is exempt, and the
+    report names the requirement line and its parent (`declared by uvicorn as
+    `uvloop>=0.15.1; (sys_platform != 'win32' and …) and extra == 'standard'`). The evidence is the same
+    metadata the closure was walked from, so the waiver cannot outlive the fact;
+  - a pin **no** host walk can discover is declared in the module with its reason: `greenlet` for the
+    deployment image (`TARGET_PLATFORM_PINS`) and `colorama` for a CI matrix platform
+    (`MATRIX_PLATFORM_PINS`). Neither is exempt from *absent* or from *disagreeing with the declaration*, and
+    each is checked where the version is a fact: `greenlet` against the built image's freeze, `colorama`
+    against a Windows install's own.
+* **The artifact-level proof** (`make lock-e2e`, `scripts/lock_e2e.py`): the last local run was **10/10**, and
+  the first hosted run was **9/10** on the same script and a same-source build. Neither figure is taken on the
+  54-pin file this section describes, so the next hosted run certifies them and the two numbers are printed
+  side by side rather than smoothed into one. The single check that went red on the runner was a claim about
+  the *host*, not about the artifact, which is why it is treated as a gate defect and fixed as one. The
   headline is measured on the build rather than on the file - two `docker build --no-cache` runs from
-  unchanged source print **byte-identical `pip freeze --all`** (38 lines each). `--no-cache` is what makes
+  unchanged source print **byte-identical `pip freeze --all`** (38 lines on the darwin build, 39 on the
+  GitHub runner's; either way the two builds print the same text). `--no-cache` is what makes
   that a fact instead of a tautology: with the layer cache on, an identical freeze would only restate the
-  cache key. From the same image: 34 installed packages, 0 disagreeing with the pins, no install form outside
-  `name==version`, `greenlet` present exactly as declared, and **FC-1 executed inside the image** over
-  `core,vision` (34 packages from 13 roots, PASS, `greenlet 3.5.6` graded `MIT AND PSF-2.0`) - with the host
-  scan checked in the same run *not* to see it, so the image-side scan cannot be theatre.
+  cache key. From the same image: 34 installed packages on the darwin build (35 on the runner's), 0
+  disagreeing with the pins, no install form outside `name==version`, `greenlet` present exactly as declared,
+  and **FC-1 executed inside the image** over
+  `core,vision` (34 packages from 13 roots, PASS, `greenlet 3.5.6` graded `MIT AND PSF-2.0`) - and, on a host
+  that cannot install `greenlet`, the host scan checked in the same run *not* to see it, so the image-side scan
+  cannot be theatre. That last arm is the one the first hosted run inverted: `reproducible-image` executes on
+  ubuntu, where `greenlet` genuinely is in the host's closure, so absence cannot be the witness there and the
+  check now proves the weaker true thing instead - that the image run grades a different package set than the
+  host does (`53 packages from 22 declared roots` on the runner against `34 from 13` inside the image).
 * **Four ways this gate could be faked, each caught** (`make lock-mutations`; exit 0 only because the gate
   noticed, and the target's `|| { echo "mutation X was NOT caught"; exit 1; }` guard turns an uncaught one
   red): a lock whose pin disagrees with the closure (`bump-pin`, names the `DRIFT`), a declared dependency no
@@ -674,8 +697,11 @@ Landed and verified; commands and every printed count in README §2.5 and [`TODO
   a fresh env produced, and that was answered by declaring more, not by weakening the rule - and the closure
   walk became marker-aware, which is how it had been *under*-reporting: a fused
   `sys_platform != "win32" and extra == "standard"` line evaluated false with no `extra` binding, and uvicorn's
-  runtime dependencies vanished (the lock went 47 → 42 while looking more correct). The scan now prints what
-  it declined to follow: `not followed: extra=243, marker=14 requirement line(s)`.
+  runtime dependencies vanished (the lock went 47 → 42 while looking more correct). The scan prints what
+  it declined to follow - `not followed: extra=243, marker=14 requirement line(s)` on that run - and those two
+  counts are a property of the installed metadata under the requested extras, so they move when an install
+  does (this tree prints `extra=244, marker=16`); the invariant the gate holds is that the line exists, not
+  which number is on it.
 * **Suite at this point:** **475 tests — 456 passed / 19 visible skips** on SQLite defaults (57.3 s),
   **475 passed / 0 skipped** on the same suite against `postgres:16` + `valkey/valkey:8` (71.6 s), and both
   legs now run on the locked package set; ruff clean; 0 fixture databases surviving after the Postgres leg.
@@ -1566,10 +1592,11 @@ access + publishable attestation), R18 (real-time audio) — each mapped to the 
   (MIT, and `cryptography` Apache-2.0/BSD-3) behind an **optional `jwt` extra**, so `pip install synthverify`
   pulls neither, `oidc_enabled` defaults false and short-circuits before any socket, and the FC-4 air-gap path
   is unchanged. FC-1 now grades **52 packages from 22 declared roots** (`make freedom` PASS, +`PyJWT` and
-  +`types-PyYAML` as roots, +`cryptography`/`cffi`/`pycparser` in the closure), the lock is **53 pinned**, and
-  `alembic heads` = **`0008`**. The full SQLite suite is **1023 tests, 0 failures, 0 errors** (21 dialect/
+  +`types-PyYAML` as roots, +`cryptography`/`cffi`/`pycparser` in the closure), the lock is **54 pinned** (the
+  54th is `colorama`, which the first hosted Windows run required — §6.1), and
+  `alembic heads` = **`0008`**. The full SQLite suite is **1026 tests, 0 failures, 0 errors** (21 dialect/
   service skips); ruff clean and `mypy synthverify` at **0 errors across 73 source files**. The Postgres/Valkey
-  and container portability legs have **not** been re-run on the 1023 tree — the services are down on this box
+  and container portability legs have **not** been re-run on the 1026 tree — the services are down on this box
   — so their rows in README §2.5 carry their last-measured number labelled as the previous measurement rather
   than a borrowed current one.
 - Relaxing an FC constraint requires a *rejection of FC* section in the PR justifying why the goal

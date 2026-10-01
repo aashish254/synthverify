@@ -129,7 +129,10 @@ jobs:
     # anywhere, which is exactly the path a first-time user takes.
     #
     # Windows is the honest gap: `docs/INSTALL.md` carries the PowerShell commands this job runs,
-    # and until a windows-latest run goes green that section is intent rather than evidence.
+    # and until a windows-latest run goes green that section is intent rather than evidence. The
+    # first hosted run reached the doctor on Windows and stopped there (the lock check mistook a
+    # darwin closure for the project's - see the CHANGELOG entry), so on this platform `Run test
+    # suite` has still never executed and the 21-skip ceiling above is untested there.
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -566,8 +569,14 @@ jobs:
           cache: pip
       - name: Install system deps
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: "Install the gate's deps (host side: the driver that verifies a million rows is the product's own)"
-        run: pip install -c docker/requirements-lock.txt -e ".[vision,dev]"
+      - name: "Install the bench's own deps (host side: httpx, PIL fixtures, and the CI verifier driver)"
+        run: |
+          pip install -c docker/requirements-lock.txt -e ".[vision,dev]"
+          # BSD-3 and CI-only, like every other leg that reads Postgres from the host: the product's
+          # driver is psycopg, and only docker/Dockerfile.postgres puts it in an image (FC-1 note in
+          # docs/goal-spec.md §6.1). `scripts/ledger_bench.py` verifies a million rows through whatever
+          # `SV_TEST_POSTGRES_URL` names, which here is pg8000.
+          pip install "pg8000>=1.21.5"
       - name: AC-IDAM-4 - the mutation patches still quote live source
         run: python scripts/ledger_e2e.py --check-anchors
       - name: AC-IDAM-4 - the checkpoint suite on an unmutated build

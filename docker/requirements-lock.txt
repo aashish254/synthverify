@@ -18,11 +18,16 @@
 # that builds this wheel is resolved by pip; the setuptools/wheel pins below govern the
 # environment that runs the gates, where FC-1 can read their licences.
 #
-# One pin is here for the image and not for the machine that wrote this file: `greenlet`, which
-# SQLAlchemy requires only on the linux platforms in its `platform_machine` marker. A host on
-# darwin arm64 cannot discover it by walking installed metadata, so it is declared in
-# dependency_lock.TARGET_PLATFORM_PINS with its reason - and scripts/lock_e2e.py checks it
-# against the built image, which is where the fact lives.
+# Two pins are here for a platform and not for the machine that wrote this file: `greenlet`, which
+# SQLAlchemy requires only on the linux platforms in its `platform_machine` marker, and `colorama`,
+# which click and pytest require only on Windows. A darwin arm64 host cannot discover either by
+# walking installed metadata, so they are declared in dependency_lock.TARGET_PLATFORM_PINS and
+# MATRIX_PLATFORM_PINS with their reasons. Each is checked where the fact lives: `greenlet` against
+# the built image (scripts/lock_e2e.py), `colorama` against a Windows install's own version
+# (the `portability` CI matrix). A pin that *is* discoverable on some platform and absent from this
+# host's closure - `uvloop`, which uvicorn[standard] gates off win32 - is exempt from the stale
+# direction by the marker evidence itself: the closure walk reports the requirement line and its
+# parent, so the exemption is read out of installed metadata rather than asserted in a table.
 alembic==1.20.0
 annotated-doc==0.0.5
 annotated-types==0.8.0
@@ -31,6 +36,7 @@ ast-serialize==0.11.2
 certifi==2026.7.22
 cffi==2.1.1
 click==8.4.2
+colorama==0.4.6
 cryptography==50.0.2
 fastapi==0.141.1
 greenlet==3.5.6

@@ -101,6 +101,15 @@ class Stack:
         }
         # The mutation that has no consumer tier must not quietly start one.
         self.services = ["api1", "api2"] if args.without_workers or args.embedded else ["api1", "api2", "worker1", "worker2"]
+        # `--wait` is only asked of a service that has a healthcheck to wait for. The replicas do
+        # (`/healthz`); the consumer tier deliberately does not - a `synthverify worker` has no
+        # listening socket, so no probe could mean anything by "ready", and inventing one would be
+        # theatre. `docker compose up --wait` exits non-zero on a `healthcheck: disable: true`
+        # container ("... has no healthcheck configured"), which is how the first hosted run died with
+        # every one of its containers already healthy. The worker tier's liveness is proved where this
+        # script proves everything else: in the database, by `claimed_by` naming both worker hostnames.
+        self.api_services = [s for s in self.services if not s.startswith("worker")]
+        self.consumer_services = [s for s in self.services if s.startswith("worker")]
 
     def compose(self, *args: str, capture: bool = False) -> subprocess.CompletedProcess:
         cmd = ["docker", "compose", "-p", self.project, "-f", str(COMPOSE_FILE), *args]
@@ -125,16 +134,23 @@ class Stack:
         )
 
     def up(self) -> None:
-        result = self.compose("up", "-d", "--wait", "--wait-timeout", "240", *self.services)
+        result = self.compose("up", "-d", "--wait", "--wait-timeout", "240", *self.api_services)
         if result.returncode != 0:
             self.dump()
-            raise RuntimeError(f"`docker compose up` failed for {self.services}")
+            raise RuntimeError(f"`docker compose up --wait` failed for {self.api_services}")
+        if self.consumer_services:
+            # No `--wait`: see the note on `self.api_services`. The `service_healthy` edges are still
+            # honoured, so the replicas are up and serving before these containers are even created.
+            result = self.compose("up", "-d", *self.consumer_services)
+            if result.returncode != 0:
+                self.dump()
+                raise RuntimeError(f"`docker compose up` failed for {self.consumer_services}")
         print(f"stack {self.project} up: {', '.join(self.services)} on :{self.api_ports[0]}/:{self.api_ports[1]},"
               f" postgres on :{self.pg_port}")
 
     def dump(self) -> None:
         for label, args in (
-            ("ps", ("ps", "a")),
+            ("ps", ("ps", "--all")),
             ("logs", ("logs", "--tail", "40")),
         ):
             out = self.compose(*args, capture=True)

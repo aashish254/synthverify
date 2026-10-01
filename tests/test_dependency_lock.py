@@ -17,7 +17,9 @@ from synthverify.cli import main as cli_main
 from synthverify.compliance.dependency_lock import (
     HEADER,
     LOCK_PATH,
+    MATRIX_PLATFORM_PINS,
     NOT_A_DEPENDENCY,
+    PLATFORM_PINS,
     TARGET_PLATFORM_PINS,
     Pin,
     check_lock,
@@ -81,7 +83,7 @@ class TestReadLock:
 class TestClosureVersions:
     def test_every_declared_group_is_counted(self):
         """The answer to "did this check see the extra I just added?" has to be printed."""
-        _, groups = closure_versions(REPO_ROOT)
+        _, groups, _ = closure_versions(REPO_ROOT)
         assert {"core", "vision", "dev", "valkey", "jwt"} == set(groups)
         assert groups["vision"] >= 2
         # `jwt` exists so the OIDC bearer path (REQ-IDAM-1 / AC-IDAM-1) can be graded offline;
@@ -112,8 +114,23 @@ class TestClosureVersions:
             '[project]\nname = "demo"\ndependencies = ["definitely-not-installed-xyz"]\n',
             encoding="utf-8",
         )
-        versions, _ = closure_versions(tmp_path)
+        versions, _, _ = closure_versions(tmp_path)
         assert versions.get("definitely-not-installed-xyz") == ""
+
+    def test_the_walk_reports_what_a_marker_hid_from_this_interpreter(self):
+        """The evidence for an exemption is the requirement line itself, parent included.
+
+        This is the half of the design that keeps a platform rule from becoming a table somebody
+        forgets to maintain: `click` on this machine carries `colorama; platform_system == "Windows"`,
+        and that line - not a hand-written allowance - is what makes a `colorama` pin here defensible
+        on darwin and checkable on Windows.
+        """
+        _versions, _groups, inert = closure_versions(REPO_ROOT)
+        assert "colorama" in inert
+        assert "click" in inert["colorama"] and "Windows" in inert["colorama"]
+        # A marker that *passes* here is not inert: uvloop is installed on darwin, so its pin is
+        # compared against a real version rather than exempted.
+        assert "uvloop" not in inert
 
 
 class TestCheckLock:
@@ -171,7 +188,7 @@ class TestCheckLock:
             + "\n"
         )
         issues = check_lock(REPO_ROOT, without).issues
-        assert [i.kind for i in issues if "ships in the image" in i.detail] == ["unpinned"], issues
+        assert [i.kind for i in issues if "ships on another platform" in i.detail] == ["unpinned"], issues
         assert {i.detail.split()[0].rstrip(":") for i in issues} == {"greenlet"}, issues
 
         disagreed = tmp_path / "disagreed.txt"
@@ -186,17 +203,65 @@ class TestCheckLock:
         # Apple Silicon, where it is not, `target-drift` is the only possible report.
         assert [i.kind for i in moved] == ["drift"] or [i.kind for i in moved] == ["target-drift"], moved
 
+    def test_a_pin_another_platform_needs_and_this_one_cannot_install(self, tmp_path: Path):
+        """`colorama` is the pin the first hosted Windows run died on.
+
+        Two findings, both spurious on their face: on Windows it is in the closure with no lock entry
+        (`unpinned`), and on darwin it is in the lock with no closure entry (`stale`). The fix had to
+        be a pin the darwin host cannot verify the version of, so the version's authority is the
+        Windows run itself - which is the `portability` matrix leg, and why both halves are asserted
+        here rather than trusting the comment in the file.
+        """
+        pins, _ = read_lock(LOCK_PATH)
+        assert "colorama" in pins, "the lock has to pin what a Windows install pulls in"
+        assert pins["colorama"].version == MATRIX_PLATFORM_PINS["colorama"][0]
+        assert check_lock(REPO_ROOT, LOCK_PATH).ok
+
+        without = tmp_path / "without.txt"
+        without.write_text(
+            "\n".join(
+                line for line in LOCK_PATH.read_text().splitlines() if not line.startswith("colorama==")
+            )
+            + "\n"
+        )
+        issues = [i for i in check_lock(REPO_ROOT, without).issues if "colorama" in i.detail]
+        assert [i.kind for i in issues] == ["unpinned"], issues
+
+        disagreed = tmp_path / "disagreed.txt"
+        disagreed.write_text(
+            LOCK_PATH.read_text().replace("colorama==0.4.6", "colorama==0.3.9", 1)
+        )
+        moved = [i for i in check_lock(REPO_ROOT, disagreed).issues if "colorama" in i.detail]
+        assert [i.kind for i in moved] == ["target-drift"], moved
+        assert "0.4.6" in moved[0].detail and "MATRIX_PLATFORM_PINS" in moved[0].detail
+
+    def test_a_pin_inert_on_this_platform_is_exempted_with_its_evidence_printed(self, tmp_path: Path):
+        """The `stale` direction may not accuse a pin this platform simply does not install.
+
+        `valkey` requires `async-timeout` below python 3.11.3; this interpreter is newer, so nothing
+        here installs it while a CI matrix on 3.11.0 would. The exemption is earned from the metadata
+        line - and it is *reported*, because an exemption nobody can see is how a stale pin hides.
+        """
+        lock = tmp_path / "lock.txt"
+        lock.write_text(LOCK_PATH.read_text() + "async-timeout==5.4.2\n")
+        report = check_lock(REPO_ROOT, lock)
+        assert report.ok, report.format_text()
+        assert "async-timeout==5.4.2" in report.exempted
+        assert "valkey" in report.exempted["async-timeout==5.4.2"]
+        assert "async-timeout==5.4.2" in report.format_text()
+
     def test_the_exclusions_are_the_ones_the_script_relies_on(self):
         assert {"pip", "setuptools", "wheel", "synthverify"} == set(NOT_A_DEPENDENCY)
         assert "greenlet" in TARGET_PLATFORM_PINS
+        assert set(PLATFORM_PINS) == set(TARGET_PLATFORM_PINS) | set(MATRIX_PLATFORM_PINS)
         # Every exempt pin is actually in the file, or the exemption hides a missing pin.
         pins, _ = read_lock(LOCK_PATH)
-        assert all(name in pins for name in TARGET_PLATFORM_PINS)
+        assert all(name in pins for name in PLATFORM_PINS)
 
     def test_the_header_explains_itself(self):
         text = LOCK_PATH.read_text()
         assert text.startswith(HEADER.splitlines()[0])
-        for phrase in ("constraints", "Dockerfile.postgres", "greenlet", "PEP 517"):
+        for phrase in ("constraints", "Dockerfile.postgres", "greenlet", "colorama", "PEP 517"):
             assert phrase in text
 
 

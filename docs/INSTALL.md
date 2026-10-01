@@ -21,7 +21,7 @@ git clone https://github.com/aashish254/synthverify.git
 cd synthverify
 make setup          # creates .venv, installs every declared extra from docker/requirements-lock.txt
 make doctor         # names anything missing; exit 0 means the environment is complete
-make test           # 1023 tests, ~3 min, SQLite - no services required
+make test           # 1026 tests, ~3 min, SQLite - no services required
 make demo           # 9 synthetic-vs-authentic samples through the real pipeline
 ```
 
@@ -68,10 +68,15 @@ live under `.venv\Scripts\`. Docker Desktop works for the Postgres and Valkey le
 skips, and `pg8000` — the CI-only driver the Postgres tests use, deliberately pure-Python so it
 cannot fail to build — installs with `pip install "pg8000>=1.21.5"`.
 
-> **Status of this section: written from the code, not from a Windows run.** No Windows machine has
-> executed this suite. CI carries a `windows-latest` leg, so the first green run there is the
-> evidence; until then treat 3.11 on Linux/macOS as the measured path and this section as the
-> intended one.
+> **Status of this section: written from the code, and now partly from a Windows run.** CI has executed a
+> `windows-latest` leg: the `pip install -c docker\requirements-lock.txt -e ".[vision,valkey,dev]"` line above
+> and `scripts\doctor.py` both ran there, and the doctor stopped the job — it reported the dependency lock as
+> `RESULT: FAIL (2 problem(s))` because the check treated a darwin package closure as the project's definition
+> of one (`colorama` unpinned, which only a Windows install has; `uvloop` stale, which no Windows install has).
+> Both are fixed in-tree, and the lock now passes a simulated Windows closure with 0 issues. **What is still
+> not evidence: `pytest` has never run on Windows**, on any machine, so the suite's behaviour there — including
+> whether all 1026 cases pass — is still the intended path rather than a measured one, and the next
+> `windows-latest` run is the witness.
 
 ## Docker, without a Python toolchain
 

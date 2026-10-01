@@ -21,6 +21,11 @@ docker image inspect "$IMAGE" >/dev/null 2>&1 || {
 }
 
 rm -rf "$WORK" && mkdir -p "$WORK"
+# The mount has to be writable by the *container's* uid, not the host's. `docker/Dockerfile` ends in
+# `USER svuser` (uid 10001) and the host created this directory as whoever runs CI, so a default 0755
+# mount gives the fixture write below a PermissionError. Docker Desktop's uid remapping hides this on a
+# laptop; a Linux runner does not hide it. 0777 on a scratch fixture directory, deliberately.
+chmod 0777 "$WORK"
 
 # Control: prove the seal is real before trusting anything that runs inside it.
 if docker run --rm --network none "$IMAGE" \

@@ -263,10 +263,13 @@ items are tracked in [`docs/goal-spec.md`](docs/goal-spec.md) §9 and in `TODO.m
   `test_ac_idam_1_rejects_a_token_for_another_audience` (a token for another audience cannot authenticate),
   `test_alg_confusion_is_refused` (the allow-list check fires before PyJWT sees the token) and
   `test_oidc_disabled_short_circuits_before_the_network` (a default install reaches no JWKS socket). `test_the_declared_root_count_matches_what_the_gates_print`
-  now reads **22 declared roots → 52 packages** and the lock carries **53 pins**, both re-derived from the
+  now reads **22 declared roots → 52 packages** and the lock carried **53 pins** at that measurement (**54**
+  since the Windows platform-pin table added `colorama`, below), both re-derived from the
   resolved closure rather than asserted; `MIT-0` was added to `ALLOWED_LICENSES` for `cffi`. The full SQLite leg
-  through `.venv/bin/python`: **1023 tests → 1002 passed, 0 failed, 21 skipped in 163.8 s** (the 21 are
-  Postgres/Valkey-only). The Postgres leg and the two container legs (`make lock-e2e`, `make airgap`) are
+  through `.venv/bin/python`: **1023 tests → 1002 passed, 0 failed, 21 skipped in 163.8 s** at that
+  measurement, and **1026 → 1005 passed, 0 failed, 21 skipped in 165.2 s** on the tree that ships this entry
+  (the +3 are the platform-lock cases; the 21 are Postgres/Valkey-only). The Postgres leg and the two container
+  legs (`make lock-e2e`, `make airgap`) are
   **RE-MEASURE PENDING** on this machine — the services are down and the thermal budget says do not spin them up
   for a doc pass; the README rows carry that label rather than restating the pre-change numbers.
 - **`mypy` cleared to zero and became a real gate (T50).** The tree read **21 errors in 12 files** while
@@ -338,6 +341,92 @@ items are tracked in [`docs/goal-spec.md`](docs/goal-spec.md) §9 and in `TODO.m
   tests/test_release_hygiene.py tests/test_cli_eval.py tests/test_eval_metrics.py` = **91 collected, 0
   failures, 0 errors, 0 skipped** in 0.612 s (junit) — the doc guards, the CLI's own 15, and the 55
   metric tests the gate counts — and `make lint` = **All checks passed!**.
+
+### Fixed — the first hosted CI run
+
+`github.com/aashish254/synthverify` had never executed a workflow before this push. The first run
+(`gh run view 36869183171`) is the evidence for everything below: **19 jobs — 12 success, 7 failure**,
+and the 12 greens are the ones that had never run off a laptop (`test (3.11, postgres)`, `test (3.11,
+sqlite)`, all three `portability (macos-latest, …)` legs, `evaluation`, `tenancy`, `retention`, `limiter`,
+`freedom`, `tracing`, `migrations`). The 7 reds were **five distinct causes**, and none of them was a
+product defect: every one was a claim about an environment that only the environment can adjudicate.
+
+- **`docker` — a fixture mount the container could not write.** Literal:
+  `PermissionError: [Errno 13] Permission denied: '/work/evidence.jpg'` in
+  `scripts/airgap.sh`. `docker/Dockerfile` ends in `USER svuser` (uid 10001) and the host created
+  `$WORK` mode 0755 as whoever runs CI, so the fixture write inside the air-gapped container failed.
+  Docker Desktop's uid remapping hides this on a laptop — the gate had passed 100% of the times it was
+  ever run, which were all on laptops. Fixed by `chmod 0777 "$WORK"` on the scratch fixture directory,
+  deliberately, with the reason in the comment above it.
+- **`scale` — `--wait` asked of a service that has no healthcheck to wait for.** Literal:
+  `container sv-scale-6e60446c-worker2-1 has no healthcheck configured` followed by
+  `RuntimeError: \`docker compose up\` failed for ['api1', 'api2', 'worker1', 'worker2']`, while every one
+  of those containers was already running. `docker/compose-scale.yml` sets `healthcheck: disable: true`
+  on the worker tier on purpose — a `synthverify worker` opens no listening socket, so no probe could
+  mean anything by "ready", and inventing one would be theatre. `docker compose up --wait` exits
+  non-zero on such a service anyway. Fixed by splitting the services in `scripts/scale_e2e.py`: the API
+  replicas still come up `--wait --wait-timeout 240`, the consumers come up without it, and their
+  liveness is proved where this script proves everything else — in the database, by `claimed_by` naming
+  both worker hostnames. The same commit makes `dump()` print `ps --all` before the logs and names the
+  service list that failed, so the next such death says which tier died instead of raising one masked
+  `RuntimeError` after a `ps` that listed nothing.
+- **`ledger` — the install step's name claimed a driver it did not install.** Literal:
+  `ModuleNotFoundError: No module named 'pg8000'`. The job's step was labelled as installing the
+  product's Postgres driver; it installed `.[vision,dev]`, and `psycopg` only ever enters the build
+  through `docker/Dockerfile.postgres` (FC-1's note in `docs/goal-spec.md` §6.1). `scripts/ledger_bench.py`
+  verifies a million rows through whatever `SV_TEST_POSTGRES_URL` names, which in CI is BSD-3 `pg8000`,
+  exactly like the four legs that already install it (`test`, `migrations`, `scale`, `tracing`). Fixed by
+  installing it and renaming the step to say what it actually puts in the environment.
+- **`portability (windows-latest, 3.11 / 3.12 / 3.13)` — the lock check mistook one platform's closure
+  for the project's.** Literal from the environment doctor:
+  `[fail] dependency lock  \`make lock-check\` exits 1 in this environment.   RESULT: FAIL (2 problem(s))`
+  — and *that* is the second bug, because the count of two was all `doctor.py` surfaced: the two names
+  had to be recovered by re-running the real `check_lock` against a simulated win32 environment
+  (`scripts/`-side, throwaway) before they could be diagnosed. They are `colorama: unpinned` and
+  `uvloop: stale`. Both are correct findings *about a Windows host* and both are wrong as gate failures:
+  `click` requires `colorama; platform_system == "Windows"` and `pytest` requires
+  `colorama>=0.4; sys_platform == "win32"`, so a Windows closure genuinely contains a package no darwin
+  or linux closure mentions (nothing pinned it → `unpinned`), and `uvloop` is required by
+  `uvicorn[standard]` under `sys_platform != "win32"`, so it is genuinely absent from a Windows install
+  while being a real pin of the project (`stale`). The existing answer for exactly this shape was
+  `TARGET_PLATFORM_PINS` — the hand-declared, reason-carrying table that let `greenlet` into the lock for
+  the linux image — and applying it again by hand would have been the wrong lesson, because it is
+  *declared* where a marker line already states the fact. So the exemption is now derived: the FC-1
+  closure walk already reports every requirement line it declines to follow, with its parent and its
+  marker, and `closure_versions` returns those as `inert` (a pin inert on this platform is exempt from
+  *stale* with its evidence printed — `inert on this platform, pinned anyway: uvloop==0.22.1 - declared
+  by uvicorn as \`uvloop>=0.15.1; (sys_platform != 'win32' …) and extra == 'standard'\``), while a matrix
+  platform that needs a package this host cannot discover is added to the new
+  `MATRIX_PLATFORM_PINS` table, measured rather than guessed (`pip download colorama
+  --platform win_amd64 --python-version 3.12` → **0.4.6**). `PLATFORM_PINS` is the union, `--write-lock`
+  emits it, and the presence requirement still fires in the other direction: a lock missing `colorama`
+  is `unpinned` on every platform, so an exemption cannot rot into a free-for-all.
+  Graded on this tree: `simulated windows: 51 closure, 54 pins, 0 issue(s)` and `simulated linux:
+  52 closure, 54 pins, 0 issue(s)` running the shipped `check_lock`, `make lock-check` →
+  **52 packages in the declared closure, 54 pinned … RESULT: PASS**, and **3 new cases** in
+  `tests/test_dependency_lock.py` for the derived marker evidence, the matrix pin in both directions,
+  and the printed exemption (suite **1026 collected, 1005 passed, 0 failed, 0 errors, 21 skipped in
+  165.2 s**, junit).
+- **`reproducible-image` — the anti-theatre assertion was only true on Apple Silicon.** Literal:
+  `FAIL  the host scan genuinely does not see it (so the image run is not theatre) (… 53 packages from 22
+  declared roots …; greenlet in host output: True)`, with **9 checks passed, 1 failed**. The check asserted
+  that the *host* FC-1 scan must NOT contain `greenlet`, so that grading it inside the image would prove
+  something about the artifact rather than the host. On a linux runner `greenlet` legitimately *is* in the
+  host closure, so the check failed on a true artifact and a passing build. Fixed by branching on which
+  platform the claim is being made from: where the host cannot see the pin, absence remains the witness;
+  where it can, the witness becomes that the image run grades a *different* closure than the host does
+  (`53 packages from 22 declared roots` on the runner against `34 from 13` inside the image — the two
+  counts are compared, not assumed). The `--check-anchors`-style discipline held: no assertion was
+  weakened, and the mutation arms that this gate exists to catch still go red.
+
+**The claim this section makes, and the one it does not.** What is measured here is the diagnosis and the
+local re-derivation of each failure, on a tree where the Docker daemon is down for thermal-budget reasons,
+so `make airgap`, `make scale`, `make ledger-postgres`, `make docker`, `make lock-e2e` and the Windows
+suite itself have **not** been re-run locally — the labelled rows in §2.5 of `README.md` stay
+**RE-MEASURE PENDING**, and the next hosted run is the witness for those seven jobs. Notably unproven until
+then: the Windows *test suite* has never executed past `doctor.py`, so its pytest counts are not quotable
+at any size; nothing in `tests/` skips on `sys_platform`, so the ≤21-skip ceiling should hold there, but
+"should" is not a measurement and no row claims it.
 
 ## [1.0.0] — 2026-09-27
 

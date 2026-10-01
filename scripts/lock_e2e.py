@@ -16,10 +16,12 @@ Four claims, each with its own witness and each with a way to fake it:
 3. **The lock reaches the image.** Proved by *not* assuming it: build with a doctored pin and show
    the doctoring in the freeze. A constraint pip ignored would leave the newest version there.
 4. **The licence gate runs on the shipping platform.** One pin - `greenlet` - is required by
-   SQLAlchemy's `platform_machine` marker on linux and by nothing on this host, so the host scan
-   cannot see it. `FC-1` therefore also runs *inside the image* over `core,vision`, and the host
-   scan is checked to genuinely not see it. A hole you have measured is a known limitation; a hole
-   you have not looked for is a bug.
+   SQLAlchemy's `platform_machine` marker on linux and by nothing on darwin arm64, so a host on that
+   platform cannot see it at all. `FC-1` therefore also runs *inside the image* over `core,vision`.
+   On a host that *is* a linux platform the pin is visible there too, so the anti-theatre witness
+   changes to the one that is true everywhere: the image run grades the artifact's 13-root closure,
+   not this host's 22-root development one. A hole you have measured is a known limitation; a hole you
+   have not looked for is a bug.
 
     usage: ./.venv/bin/python scripts/lock_e2e.py [options]
 
@@ -202,11 +204,27 @@ def verify_licence_gate(tag: str) -> None:
     host = run_and_capture([sys.executable, "-m", "synthverify.cli", "licenses"])
     host_sees = bool(re.search(r"\bgreenlet\b", host[1]))
     host_header = next((ln for ln in host[1].splitlines() if "FC-1 dependency licence scan" in ln), "?")
-    check(
-        "the host scan genuinely does not see it (so the image run is not theatre)",
-        not host_sees and host[0] == 0,
-        f"{host_header.strip()}; greenlet in host output: {host_sees}",
-    )
+    if host_sees:
+        # The host is a platform where greenlet really is in scope (linux x86_64/aarch64), so "the host
+        # cannot see it" is not a witness this machine can offer - it was written from a darwin arm64
+        # laptop. The non-redundancy claim that survives on every platform is the weaker, true one:
+        # the image-side run grades the *artifact's* closure (core + vision, 13 declared roots) while
+        # this host grades the declared closure of a development install (all extras, 22 roots). Two
+        # different package sets, so the image run is about the shipped image, not a replay of the host.
+        counts = re.search(r"(\d+) packages from (\d+) declared roots", host_header)
+        image_counts = re.search(r"(\d+) packages from (\d+) declared roots", header)
+        check(
+            "this host is a greenlet platform, so the image run must grade a different closure",
+            host[0] == 0 and bool(counts and image_counts) and counts.groups() != image_counts.groups(),
+            f"host [{counts.group(0) if counts else '?'}] vs image "
+            f"[{image_counts.group(0) if image_counts else '?'}]",
+        )
+    else:
+        check(
+            "the host scan genuinely does not see it (so the image run is not theatre)",
+            host[0] == 0,
+            f"{host_header.strip()}; greenlet absent from host output",
+        )
 
 
 def run_and_capture(cmd: list[str]) -> tuple[int, str]:
