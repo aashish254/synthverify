@@ -75,6 +75,10 @@ from synthverify.db import (
     utcnow,
 )
 
+# Children inherit the OS locale for stdio (cp1252 on Windows). Every text-mode spawn in this
+# file names encoding="utf-8", so the child has to be UTF-8 too or the two ends disagree.
+os.environ.setdefault("PYTHONUTF8", "1")
+
 REPO = Path(__file__).resolve().parent.parent
 PROBES = ("mid-edit", "relinked", "relinked-resealed", "deleted-resealed")
 
@@ -400,7 +404,7 @@ def drive(name: str, url: str, args: argparse.Namespace, *, key: str, **extra: o
         capture_output=True,
         text=True,
         timeout=3600,
-        check=False,
+        check=False, encoding="utf-8",
     )
     if proc.returncode != 0:
         raise SystemExit(f"phase {name} {extra} failed:\n{proc.stdout[-1500:]}\n{proc.stderr[-4000:]}")

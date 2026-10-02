@@ -42,6 +42,10 @@ import httpx  # noqa: E402
 import sqlalchemy as sa  # noqa: E402
 from fixtures_gen import doctored_photo  # noqa: E402
 
+# Children inherit the OS locale for stdio (cp1252 on Windows). Every text-mode spawn in this
+# file names encoding="utf-8", so the child has to be UTF-8 too or the two ends disagree.
+os.environ.setdefault("PYTHONUTF8", "1")
+
 IMAGE = "postgres:16"
 ADMIN_KEY = "sv_live_postgres_e2e_admin_000000000000"
 CHECKS: list[str] = []
@@ -73,7 +77,7 @@ def ensure_server(url: str | None, port: int):
         ["docker", "run", "-d", "--name", container,
          "-e", "POSTGRES_USER=sv", "-e", "POSTGRES_PASSWORD=sv",
          "-e", "POSTGRES_DB=postgres", "-p", f"{host_port}:5432", IMAGE],
-        check=True, capture_output=True, text=True,
+        check=True, capture_output=True, text=True, encoding="utf-8",
     )
     server = f"postgresql+pg8000://sv:sv@127.0.0.1:{host_port}/postgres"
     try:
@@ -89,7 +93,7 @@ def ensure_server(url: str | None, port: int):
         engine.dispose()
         yield server
     finally:
-        subprocess.run(["docker", "rm", "-f", container], check=False, capture_output=True, text=True)
+        subprocess.run(["docker", "rm", "-f", container], check=False, capture_output=True, text=True, encoding="utf-8")
         print(f"removed container {container}")
 
 
@@ -127,7 +131,7 @@ def app_process(database_url: str, port: int, storage: Path):
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "synthverify.app:app",
          "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
-        cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
     )
     base = f"http://127.0.0.1:{port}"
     try:

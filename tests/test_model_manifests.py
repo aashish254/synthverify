@@ -464,7 +464,7 @@ class TestRepositoryConformance:
     def test_cli_exits_zero(self):
         result = subprocess.run(
             [PY, "-m", "synthverify.cli", "model-manifests"],
-            capture_output=True, text=True, cwd=str(PROJECT), timeout=120,
+            capture_output=True, text=True, cwd=str(PROJECT), timeout=120, encoding="utf-8",
         )
         assert result.returncode == 0, result.stderr
         assert "RESULT: PASS" in result.stdout
@@ -472,7 +472,7 @@ class TestRepositoryConformance:
     def test_cli_json_is_machine_readable(self):
         result = subprocess.run(
             [PY, "-m", "synthverify.cli", "model-manifests", "--json"],
-            capture_output=True, text=True, cwd=str(PROJECT), timeout=120,
+            capture_output=True, text=True, cwd=str(PROJECT), timeout=120, encoding="utf-8",
         )
         payload = json.loads(result.stdout)
         assert payload["ok"] is True

@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import os
 import re
 import subprocess
 import sys
@@ -56,6 +57,10 @@ from synthverify.compliance.dependency_lock import (  # noqa: E402
     TARGET_PLATFORM_PINS,
     read_lock,
 )
+
+# Children inherit the OS locale for stdio (cp1252 on Windows). Every text-mode spawn in this
+# file names encoding="utf-8", so the child has to be UTF-8 too or the two ends disagree.
+os.environ.setdefault("PYTHONUTF8", "1")
 
 DOCKERFILE = REPO / "docker" / "Dockerfile"
 MUTATION_LOCK = REPO / "docker" / ".lock-mutation.txt"
@@ -79,7 +84,7 @@ def check(label: str, ok: bool, detail: object = "") -> None:
 
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, check=False)
+    return subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, check=False, encoding="utf-8")
 
 
 def normalise(name: str) -> str:
@@ -105,7 +110,7 @@ def build(tag: str, lock: str | None = None) -> tuple[int, str]:
 @contextlib.contextmanager
 def doctored_lock(text: str):
     """Write a constraints file inside the build context, and guarantee it is not left there."""
-    MUTATION_LOCK.write_text(text)
+    MUTATION_LOCK.write_text(text, encoding="utf-8")
     try:
         yield str(MUTATION_LOCK.relative_to(REPO))
     finally:
@@ -246,12 +251,12 @@ def mutate_offline(mode: str) -> bool:
         tmpdir = Path(tmp)
         if mode == "bump-pin":
             lock_copy = tmpdir / "lock.txt"
-            text = LOCK_PATH.read_text()
+            text = LOCK_PATH.read_text(encoding="utf-8")
             bumped = re.sub(
                 rf"^{SAMPLE_PACKAGE}==\S+$", f"{SAMPLE_PACKAGE}=={SAMPLE_DOCTORED}", text, count=1, flags=re.M
             )
             assert bumped != text, f"the lock does not pin {SAMPLE_PACKAGE}: the mutation would be a no-op"
-            lock_copy.write_text(bumped)
+            lock_copy.write_text(bumped, encoding="utf-8")
             rc, out = run_and_capture(
                 [sys.executable, "-m", "synthverify.cli", "dependency-lock", "--lock", str(lock_copy)]
             )
@@ -260,10 +265,10 @@ def mutate_offline(mode: str) -> bool:
             return rc == 1 and named
         # new-dep
         project = tmpdir / "pyproject.toml"
-        text = (REPO / "pyproject.toml").read_text()
+        text = (REPO / "pyproject.toml").read_text(encoding="utf-8")
         edited = text.replace('"pillow>=10.0",', f'"pillow>=10.0",\n    "{SAMPLE_NEW_DEP}",', 1)
         assert edited != text, "could not inject the extra declared requirement"
-        project.write_text(edited)
+        project.write_text(edited, encoding="utf-8")
         rc, out = run_and_capture(
             [
                 sys.executable, "-m", "synthverify.cli", "dependency-lock",
@@ -312,7 +317,7 @@ def main() -> int:
         elif args.mutate:
             doctored = f"# mutation: {args.mutate} - no pins the image could consult\n"
             if args.mutate == "doctored-pin":
-                text = LOCK_PATH.read_text()
+                text = LOCK_PATH.read_text(encoding="utf-8")
                 doctored = re.sub(
                     rf"^{SAMPLE_PACKAGE}==\S+$", f"{SAMPLE_PACKAGE}=={SAMPLE_DOCTORED}", text, count=1, flags=re.M
                 )
@@ -361,7 +366,7 @@ def main() -> int:
 
             verify_image(tag_a, lock, "image")
             verify_licence_gate(tag_a)
-            dockerfile = DOCKERFILE.read_text()
+            dockerfile = DOCKERFILE.read_text(encoding="utf-8")
             wired = any(
                 line.lstrip().startswith("RUN") and "pip install" in line and "-c requirements-lock.txt" in line
                 for line in dockerfile.splitlines()

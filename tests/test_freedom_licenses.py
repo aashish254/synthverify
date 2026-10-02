@@ -568,7 +568,7 @@ def test_subprocess_run_of_the_gate_is_green():
         [sys.executable, "-m", "synthverify.cli", "licenses", "--project-root", str(REPO_ROOT)],
         capture_output=True,
         text=True,
-        cwd=REPO_ROOT,
+        cwd=REPO_ROOT, encoding="utf-8",
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "RESULT: PASS" in result.stdout

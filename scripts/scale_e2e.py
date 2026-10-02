@@ -56,6 +56,10 @@ import sqlalchemy as sa  # noqa: E402
 from PIL import Image  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
+# Children inherit the OS locale for stdio (cp1252 on Windows). Every text-mode spawn in this
+# file names encoding="utf-8", so the child has to be UTF-8 too or the two ends disagree.
+os.environ.setdefault("PYTHONUTF8", "1")
+
 COMPOSE_FILE = REPO / "docker" / "compose-scale.yml"
 BASE_IMAGE = "synthverify:ci"
 SCALE_IMAGE = "synthverify:scale"
@@ -114,7 +118,7 @@ class Stack:
     def compose(self, *args: str, capture: bool = False) -> subprocess.CompletedProcess:
         cmd = ["docker", "compose", "-p", self.project, "-f", str(COMPOSE_FILE), *args]
         return subprocess.run(
-            cmd, cwd=REPO, env=self.env, check=False, capture_output=capture, text=True
+            cmd, cwd=REPO, env=self.env, check=False, capture_output=capture, text=True, encoding="utf-8"
         )
 
     def build(self) -> None:
@@ -294,7 +298,7 @@ def check_driver_is_the_delta(stack: Stack) -> None:
         ["docker", "run", "--rm", "--network", f"{stack.project}_default",
          "--entrypoint", "python", BASE_IMAGE,
          "-m", "synthverify.cli", "db-upgrade", "--url", url],
-        cwd=REPO, capture_output=True, text=True, check=False,
+        cwd=REPO, capture_output=True, text=True, check=False, encoding="utf-8",
     )
     output = ((result.stdout or "") + (result.stderr or "")).strip()
     tail = output.splitlines()[-1] if output else "no output"
@@ -478,7 +482,7 @@ def main() -> int:
         stack.down()
         left = subprocess.run(
             ["docker", "ps", "-a", "--filter", f"name={stack.project}", "--format", "{{.Names}}"],
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, check=False, encoding="utf-8",
         ).stdout.strip()
         print(f"containers left from this project: {left or 'none'}")
 

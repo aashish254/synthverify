@@ -514,5 +514,5 @@ def decode_text(data: bytes) -> str:
 def save_json_artifact(dir_path: Path, name: str, payload: dict) -> str:
     dir_path.mkdir(parents=True, exist_ok=True)
     path = dir_path / name
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str))
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str), encoding="utf-8")
     return str(path)

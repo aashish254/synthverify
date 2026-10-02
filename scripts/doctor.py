@@ -20,6 +20,10 @@ import sys
 import tomllib
 from pathlib import Path
 
+# Children inherit the OS locale for stdio (cp1252 on Windows). Every text-mode spawn in this
+# file names encoding="utf-8", so the child has to be UTF-8 too or the two ends disagree.
+os.environ.setdefault("PYTHONUTF8", "1")
+
 ROOT = Path(__file__).resolve().parent.parent
 LOCK = ROOT / "docker" / "requirements-lock.txt"
 
@@ -70,7 +74,7 @@ def requirement_name(spec: str) -> str:
 
 def declared_groups() -> dict[str, list[str]]:
     """Every distribution this project declares, keyed by the root that declares it."""
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     project = pyproject["project"]
     groups = {"core": list(project.get("dependencies", []))}
     groups.update({extra: list(reqs) for extra, reqs in project.get("optional-dependencies", {}).items()})
@@ -79,7 +83,7 @@ def declared_groups() -> dict[str, list[str]]:
 
 
 def check_interpreter(report: Report) -> None:
-    requires = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["requires-python"]
+    requires = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["requires-python"]
     match = re.search(r"(\d+)\.(\d+)", requires)
     floor = tuple(int(part) for part in match.groups()) if match else (3, 10)
     if sys.version_info < floor:
@@ -121,7 +125,7 @@ def check_self_contained(
         )
         return
     cfg = prefix / "pyvenv.cfg"
-    text = (cfg.read_text() if cfg.is_file() else "") if pyvenv_cfg is None else pyvenv_cfg
+    text = (cfg.read_text(encoding="utf-8") if cfg.is_file() else "") if pyvenv_cfg is None else pyvenv_cfg
     report.ok("virtualenv", f"{prefix}")
     if re.search(r"include-system-site-packages\s*=\s*true", text):
         report.fail(
@@ -176,12 +180,14 @@ def check_lock(report: Report) -> None:
         cwd=ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
         timeout=120,
     )
     first_problem = next((line for line in (proc.stdout + proc.stderr).splitlines() if "FAIL" in line or "fail" in line.lower()), "")
     if proc.returncode == 0:
-        report.ok("dependency lock", f"{len(LOCK.read_text().splitlines())} lines, matches pyproject.toml")
+        locked = len(LOCK.read_text(encoding="utf-8").splitlines())
+        report.ok("dependency lock", f"{locked} lines, matches pyproject.toml")
     else:
         report.fail(
             "dependency lock",

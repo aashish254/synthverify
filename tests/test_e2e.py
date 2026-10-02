@@ -35,7 +35,7 @@ class TestCLI:
         env.update(env_overrides or {})
         return subprocess.run(  # noqa: S603
             [PY, "-m", "synthverify.cli", *args],
-            capture_output=True, text=True, cwd=str(PROJECT), env=env, timeout=120,
+            capture_output=True, text=True, cwd=str(PROJECT), env=env, timeout=120, encoding="utf-8",
         )
 
     def test_list_detectors(self):

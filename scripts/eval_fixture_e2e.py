@@ -39,12 +39,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+# Children inherit the OS locale for stdio (cp1252 on Windows). Every text-mode spawn in this
+# file names encoding="utf-8", so the child has to be UTF-8 too or the two ends disagree.
+os.environ.setdefault("PYTHONUTF8", "1")
 
 REPO = Path(__file__).resolve().parent.parent
 PY = sys.executable
@@ -64,7 +69,7 @@ def cli(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]
         cwd=str(cwd or REPO),
         capture_output=True,
         text=True,
-        check=False,
+        check=False, encoding="utf-8",
     )
 
 

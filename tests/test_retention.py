@@ -979,7 +979,7 @@ class TestCli:
             text=True,
             cwd=str(PROJECT),
             env=env,
-            timeout=180,
+            timeout=180, encoding="utf-8",
         )
 
     async def test_the_preview_is_the_default_and_apply_is_the_opt_in(self, client):

@@ -14,6 +14,7 @@ make the hole visible to anyone who runs the suite at all.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import os
 import re
@@ -22,12 +23,17 @@ import sys
 import tomllib
 from pathlib import Path
 
+import pytest
 from conftest import new_database_url
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MAKEFILE = (REPO_ROOT / "Makefile").read_text()
-PYPROJECT = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
-README = (REPO_ROOT / "README.md").read_text()
+
+#: The prefix `.github/workflows/ci.yml` counts Windows skips by. Changing it changes the count,
+#: which is the point: the allowance is earned by naming the skip, not by widening the ceiling.
+MODE_BITS_SKIP = "POSIX mode bits: st_mode on Windows is the CRT read-only flag, not a permission set"
+MAKEFILE = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+PYPROJECT = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+README = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 DOCTOR = REPO_ROOT / "scripts" / "doctor.py"
 
 
@@ -166,7 +172,7 @@ class TestTheInstallerCoversEveryDeclaredRoot:
         assert (int(probe.group(1)), int(probe.group(2))) == floor, "the Makefile probe and the metadata disagree"
         assert "python3.10" not in MAKEFILE, "the probe list still offers an interpreter below the floor"
 
-        install = (REPO_ROOT / "docs" / "INSTALL.md").read_text()
+        install = (REPO_ROOT / "docs" / "INSTALL.md").read_text(encoding="utf-8")
         for source, name in ((README, "README.md"), (install, "docs/INSTALL.md"), (MAKEFILE, "Makefile")):
             assert not re.search(r">=\s*\*?\*?\s*3\.10", source), f"{name} still offers 3.10 as supported"
 
@@ -186,7 +192,7 @@ class TestTheInstallerCoversEveryDeclaredRoot:
         classifiers without being added here fails, and so does one dropped from the matrix while
         the metadata still advertises it.
         """
-        ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+        ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         job = ci.split("  portability:", 1)[1].split("\n  freedom:", 1)[0]
         advertised = {
             m.group(1)
@@ -208,7 +214,7 @@ class TestTheInstallerCoversEveryDeclaredRoot:
         the extra raises at limiter construction - a working README instruction the artifact
         cannot honour.
         """
-        dockerfile = (REPO_ROOT / "docker" / "Dockerfile").read_text()
+        dockerfile = (REPO_ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
         extras = set(re.search(r'pip install -c requirements-lock\.txt "\.\[([\w,]+)\]"', dockerfile).group(1).split(","))
         assert "vision" in extras
         assert "valkey" in extras, (
@@ -253,7 +259,7 @@ class TestNoClaimDependsOnTheAuthorsMachine:
         offenders: list[str] = []
         for path in self._shipped_text_files():
             for token in self.FORBIDDEN:
-                for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+                for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
                     if token in line:
                         offenders.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: {token}")
         assert not offenders, "these read as instructions to a reader who does not have this box: " + "; ".join(offenders)
@@ -277,7 +283,7 @@ class TestNoClaimDependsOnTheAuthorsMachine:
         for path in self._shipped_text_files():
             if path.suffix != ".md":
                 continue
-            for target in _markdown_link_targets(path.read_text()):
+            for target in _markdown_link_targets(path.read_text(encoding="utf-8")):
                 if target.startswith(("http://", "https://", "mailto:", "#", "/")):
                     continue
                 file_part = target.split("#", 1)[0]
@@ -298,7 +304,7 @@ class TestDoctorDescribesABrokenEnvironment:
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
-            check=False,
+            check=False, encoding="utf-8",
         )
         assert proc.returncode == 0, f"doctor failed in the environment running the suite:\n{proc.stdout}{proc.stderr}"
 
@@ -355,7 +361,7 @@ class TestDoctorDescribesABrokenEnvironment:
         doctor.check_self_contained(report)
         statuses = {subject: status for status, subject, _ in report.rows}
         inherits = bool(
-            re.search(r"include-system-site-packages\s*=\s*true", (Path(sys.prefix) / "pyvenv.cfg").read_text())
+            re.search(r"include-system-site-packages\s*=\s*true", (Path(sys.prefix) / "pyvenv.cfg").read_text(encoding="utf-8"))
             if (Path(sys.prefix) / "pyvenv.cfg").is_file()
             else False
         )
@@ -405,16 +411,44 @@ class TestTheFirstBootCredential:
         assert secret, "a database with no admin key must produce one"
         path = tmp_path / "data" / "bootstrap_admin_key.txt"
         assert stat.S_IMODE(path.stat().st_mode) == 0o600, f"umask {oct(umask)} leaked into the key file's mode"
-        assert path.read_text().strip() == secret
+        assert path.read_text(encoding="utf-8").strip() == secret
         return secret, path
 
+    # The subject of these two cases is a POSIX permission triple. Windows has no referent for it:
+    # `st_mode` there reports the CRT read-only flag expanded to 0o666 or 0o444 for every file, so
+    # `0o600` is unachievable *and* `S_IWGRP`/`S_IWOTH` are unassertable, and the NTFS ACL that would
+    # carry the same meaning is not what `os.open(..., 0o600)` writes. Skipped rather than loosened,
+    # because a weakened assertion here would read as a pass on the platforms where it can be proven.
+    # `.github/workflows/ci.yml` counts this skip by its prefix and fails if the count moves.
+    @pytest.mark.skipif(os.name == "nt", reason=MODE_BITS_SKIP)
     def test_the_key_file_is_owner_only_under_a_permissive_umask(self, tmp_path, monkeypatch) -> None:
         self._mint(tmp_path, monkeypatch, 0o000)
 
+    @pytest.mark.skipif(os.name == "nt", reason=MODE_BITS_SKIP)
     def test_the_key_file_is_owner_only_under_a_restricted_umask(self, tmp_path, monkeypatch) -> None:
         # A umask that already excludes group/other must not be the only case that works: the mode
         # is asserted, not inherited from the environment.
         self._mint(tmp_path, monkeypatch, 0o077)
+
+    def test_exactly_two_cases_sit_out_when_mode_bits_do_not_exist(self) -> None:
+        """The Windows ceiling in `.github/workflows/ci.yml` is 21 + 2, and these are those 2.
+
+        Counted from the marks rather than asserted in prose, so the allowance cannot grow by
+        decorating a third case, and cannot be quietly unused: on a platform where mode bits do
+        exist, the same marks must be inactive.
+        """
+        marked = []
+        for name in sorted(n for n in dir(type(self)) if n.startswith("test_")):
+            for marker in getattr(getattr(type(self), name), "pytestmark", []):
+                if marker.name != "skipif":
+                    continue
+                if str(marker.kwargs.get("reason", "")).startswith("POSIX mode bits:"):
+                    marked.append((name, bool(marker.kwargs.get("condition"))))
+        assert len(marked) == 2, marked
+        expected_active = os.name == "nt"
+        assert {active for _, active in marked} == {expected_active}, (
+            f"the mode-bit marks are {marked} on a platform where st_mode is {'POSIX' if not expected_active else 'CRT'}"
+        )
 
     def test_a_second_boot_mints_nothing_because_an_admin_exists(self, tmp_path, monkeypatch) -> None:
         from synthverify import app as app_module
@@ -454,3 +488,279 @@ class TestTheFirstBootCredential:
             )
         finally:
             teardown()
+
+
+# --------------------------------------------------------------------- text I/O encoding census
+
+#: Sources that ship to a stranger's machine. Everything under these three roots runs on at least
+#: one of the three OS families the CI matrix covers, so a locale assumption is a defect here.
+TEXT_IO_ROOTS = ("synthverify", "tests", "scripts")
+
+#: `(namespace, call)` pairs that are **not** a Python text stream: a raw file descriptor, a binary
+#: container parser, or an opener whose own default mode is already `w+b`. Naming them is what keeps
+#: the census from shouting about calls that were never locale-dependent.
+NATIVE_OPENERS = {
+    ("os", "open"),  # returns a descriptor; there is no codec layer to configure
+    ("io", "open"),  # takes encoding positionally
+    ("codecs", "open"),
+    ("wave", "open"),  # binary audio container
+    ("Image", "open"),  # PIL: bytes in, pixels out
+    ("PIL", "open"),
+    ("gzip", "open"),
+    ("bz2", "open"),
+    ("lzma", "open"),
+    ("zipfile", "open"),
+    ("tarfile", "open"),
+}
+
+#: `subprocess` entry points that return decoded stdout when asked for text.
+SPAWNERS = {"run", "Popen", "check_output", "check_call", "call"}
+
+
+def _callee(node: ast.Call) -> tuple[bool, str | None, str]:
+    """`(builtin_shape, namespace, name)` - `builtin_shape` means the mode argument is second."""
+    fn = node.func
+    if isinstance(fn, ast.Name):
+        return True, None, fn.id
+    if isinstance(fn, ast.Attribute):
+        receiver = fn.value
+        return False, receiver.id if isinstance(receiver, ast.Name) else None, fn.attr
+    return False, "", ""
+
+
+def _str_constant(node: ast.AST | None) -> str | None:
+    return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
+
+
+def _text_mode_spawn(node: ast.AST) -> bool:
+    """True for `subprocess.<spawn>(..., text=True, ...)` with a literal True."""
+    if not isinstance(node, ast.Call):
+        return False
+    builtin, namespace, name = _callee(node)
+    if name not in SPAWNERS or namespace != "subprocess" or builtin:
+        return False
+    for keyword in node.keywords:
+        if keyword.arg in {"text", "universal_newlines"}:
+            return isinstance(keyword.value, ast.Constant) and keyword.value.value is True
+    return False
+
+
+def unencoded_text_io(root: Path) -> tuple[list[str], int]:
+    """Every text-mode I/O call under *root* that leaves its encoding to the OS locale.
+
+    Returns `(findings, files_parsed)`. The second number is the dispatch proof: a census that
+    parsed nothing also found nothing, and "found nothing" is worth only as much as the parse that
+    produced it.
+    """
+    findings: list[str] = []
+    parsed = 0
+    for part in TEXT_IO_ROOTS:
+        for module in sorted((root / part).rglob("*.py")):
+            if "__pycache__" in module.parts:
+                continue
+            parsed += 1
+            tree = ast.parse(module.read_text(encoding="utf-8"), filename=str(module))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                builtin, namespace, name = _callee(node)
+                keywords = {k.arg: k for k in node.keywords if k.arg}
+                if "encoding" in keywords:
+                    continue
+                where = f"{module.relative_to(root)}:{node.lineno}"
+
+                if name in {"read_text", "write_text"}:
+                    findings.append(f"{where}  {name}() on a path - the OS codec reads/writes it")
+                    continue
+
+                if name == "open" or (namespace, name) == ("os", "fdopen"):
+                    if (namespace, name) in NATIVE_OPENERS:
+                        continue
+                    # `open(file, mode)` and `os.fdopen(fd, mode)` put the mode second;
+                    # `Path.open(mode)` puts it first.
+                    index = 1 if (builtin or namespace == "os") else 0
+                    mode_node = node.args[index] if len(node.args) > index else keywords.get("mode")
+                    mode = "r" if mode_node is None else _str_constant(mode_node)
+                    if mode is None:
+                        # A computed mode is how this class hides, so it is reported rather than
+                        # skipped: the fix is to name the mode, not to widen an exclusion.
+                        findings.append(f"{where}  open() with a non-literal mode - cannot be cleared")
+                    elif "b" not in mode:
+                        findings.append(f"{where}  open(..., mode={mode!r}) - the OS codec reads/writes it")
+                    continue
+
+                if _text_mode_spawn(node):
+                    keyword = "text" if "text" in keywords else "universal_newlines"
+                    findings.append(
+                        f"{where}  subprocess.{name}({keyword}=True) without encoding= - "
+                        "the parent decodes in the OS codec"
+                    )
+    return sorted(findings), parsed
+
+
+class TestTextIoNamesItsEncoding:
+    """Windows is the platform that turns an unnamed encoding into a bug rather than a style choice.
+
+    A text-mode read with no `encoding=` uses the OS locale, and on Windows that is cp1252 - which
+    cannot decode the bytes of this repository's own documentation. The hosted `windows-latest` leg
+    reached `tests/test_release_hygiene.py`, read `README.md` with `read_text()`, and died during
+    collection on `UnicodeDecodeError: 'charmap' codec can't decode byte 0x90 in position 86860`.
+
+    The 120 sites that run is the fix; this census is what keeps the class from coming back. No
+    runtime test can do that on the machine that develops it: macOS silently coerces the `C` locale
+    to UTF-8, so `LANG=C pytest` passes here while a Windows runner fails.
+    """
+
+    def test_the_census_finds_nothing_left_to_name(self) -> None:
+        findings, parsed = unencoded_text_io(REPO_ROOT)
+        assert parsed >= 126, f"the census parsed {parsed} files; it has to read the tree to prove anything"
+        assert findings == [], "text I/O that inherits the OS locale:\n" + "\n".join(findings)
+
+    def test_the_census_reports_every_shape_the_windows_run_died_on(self, tmp_path) -> None:
+        """A gate that cannot go red is not a gate: each clause is planted and must be caught."""
+        sample = tmp_path / "synthverify" / "planted.py"
+        sample.parent.mkdir(parents=True)
+        sample.write_text(
+            '''"""A file in the shapes the real tree used to have."""
+import subprocess
+from pathlib import Path
+
+
+def read(path: Path) -> str:
+    return path.read_text()
+
+
+def append(path: Path, text: str) -> None:
+    path.write_text(text)
+
+
+def rewrite(path: Path) -> str:
+    with path.open("w") as handle:
+        handle.write("x")
+    with open(path, "r") as handle:
+        return handle.read()
+
+
+def gate(cmd: list[str]) -> str:
+    return subprocess.run(cmd, capture_output=True, text=True).stdout
+
+
+def legacy(cmd: list[str]) -> str:
+    return subprocess.run(cmd, capture_output=True, universal_newlines=True).stdout
+''',
+            encoding="utf-8",
+        )
+        findings, parsed = unencoded_text_io(tmp_path)
+        assert parsed == 1, "the planted file was never parsed, so this proves nothing"
+        # Named one by one: six findings could still be six findings with a clause missing.
+        assert sum("read_text" in f for f in findings) == 1, findings
+        assert sum("write_text" in f for f in findings) == 1, findings
+        assert sum("mode='w'" in f for f in findings) == 1, findings
+        assert sum("mode='r'" in f for f in findings) == 1, findings
+        assert sum("text=True" in f for f in findings) == 1, findings
+        assert sum("universal_newlines" in f for f in findings) == 1, findings
+        assert len(findings) == 6, findings
+
+    def test_a_mode_the_census_cannot_read_is_reported_not_skipped(self, tmp_path) -> None:
+        """Silence has to cost something, or a dynamic mode becomes a way to hide in plain sight."""
+        sample = tmp_path / "synthverify" / "dynamic.py"
+        sample.parent.mkdir(parents=True)
+        sample.write_text(
+            "import sys\n\n\ndef read(path, how):\n    return open(path, how).read()\n",
+            encoding="utf-8",
+        )
+        findings, parsed = unencoded_text_io(tmp_path)
+        assert parsed == 1
+        assert len(findings) == 1 and "non-literal mode" in findings[0], findings
+
+    def test_the_census_stays_quiet_about_the_opens_that_are_not_text(self, tmp_path) -> None:
+        """The exemption table is proven, not assumed - otherwise the census shrinks to nothing."""
+        sample = tmp_path / "synthverify" / "exempt.py"
+        sample.parent.mkdir(parents=True)
+        sample.write_text(
+            '''"""Everything here is already codec-free, and must stay out of the report."""
+import os
+import subprocess
+import wave
+from pathlib import Path
+
+from PIL import Image
+
+
+def bytes_in(path: Path) -> bytes:
+    with path.open("rb") as handle:
+        return handle.read()
+
+
+def appended(path: Path) -> None:
+    with path.open("ab") as handle:
+        handle.write(b"x")
+
+
+def descriptor(path: Path) -> int:
+    return os.open(path, os.O_RDONLY)
+
+
+def pixels(path: Path) -> Image.Image:
+    return Image.open(path)
+
+
+def frames(handle) -> int:
+    with wave.open(handle, "rb") as wav:
+        return wav.getnframes()
+
+
+def named(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def child(cmd: list[str]) -> str:
+    return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8").stdout
+
+
+def binary(cmd: list[str]) -> bytes:
+    return subprocess.run(cmd, capture_output=True).stdout
+''',
+            encoding="utf-8",
+        )
+        findings, parsed = unencoded_text_io(tmp_path)
+        assert parsed == 1, "the exempt file was never parsed, so this proves nothing"
+        assert findings == [], findings
+
+    def test_the_census_does_not_invent_findings_for_helpers_named_run(self, tmp_path) -> None:
+        """`def run(...)` is a local helper in two scripts; only `subprocess.run` returns text."""
+        sample = tmp_path / "scripts" / "local_run.py"
+        sample.parent.mkdir(parents=True)
+        sample.write_text(
+            "def run(cmd):\n    return cmd\n\n\nrun(['ls'], text=True)\n",
+            encoding="utf-8",
+        )
+        findings, parsed = unencoded_text_io(tmp_path)
+        assert parsed == 1
+        assert findings == [], findings
+
+    def test_every_script_that_captures_child_text_names_the_childs_codec(self) -> None:
+        """The parent's `encoding=` is half of it; a Python child writes in the OS codec by default.
+
+        A child started from a Windows runner encodes its stdout as cp1252 unless it is put in UTF-8
+        mode, so naming `encoding="utf-8"` on the reading end alone would only move the crash from
+        the parent's decoder into the child's encoder. `os.environ.setdefault` at module scope covers
+        every child a script starts, including the ones built as `{**os.environ, ...}`. The rule is
+        total on purpose - a file that only spawns `docker` carries the line too - because an
+        exception here would have to be re-argued every time a spawn is added. The suite's children
+        are covered once, in `tests/conftest.py`, which every test file inherits.
+        """
+        missing = []
+        spawning = 0
+        for module in sorted((REPO_ROOT / "scripts").rglob("*.py")):
+            tree = ast.parse(module.read_text(encoding="utf-8"), filename=str(module))
+            if not any(_text_mode_spawn(node) for node in ast.walk(tree)):
+                continue
+            spawning += 1
+            if "PYTHONUTF8" not in module.read_text(encoding="utf-8"):
+                missing.append(str(module.relative_to(REPO_ROOT)))
+        assert spawning == 13, f"expected the 13 spawn-capturing scripts measured today, saw {spawning}"
+        assert missing == [], "children can emit cp1252 into a UTF-8 reader: " + ", ".join(missing)
+        assert "PYTHONUTF8" in (REPO_ROOT / "tests" / "conftest.py").read_text(encoding="utf-8"), (
+            "conftest.py is the single place the suite's child processes get their codec from"
+        )

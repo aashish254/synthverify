@@ -77,7 +77,7 @@ def test_the_header_is_written_once_however_many_batches_land(tmp_path):
     writer.write([row("a")])
     writer.write([row("b"), row("c")])
     writer.write([row("d")])
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     assert text.count(HEADER) == 1
     assert len(text.strip().splitlines()) == 5  # header + four rows
 
@@ -85,7 +85,7 @@ def test_the_header_is_written_once_however_many_batches_land(tmp_path):
 def test_each_batch_ends_in_a_newline_so_a_landed_row_is_a_complete_row(tmp_path):
     path = table_path(tmp_path)
     ScoreWriter(path).write([row("a")])
-    assert path.read_text().endswith("\n")
+    assert path.read_text(encoding="utf-8").endswith("\n")
 
 
 def test_writing_no_rows_writes_nothing_at_all(tmp_path):
@@ -434,7 +434,7 @@ def test_a_missing_column_and_an_extra_column_are_both_refused():
 
 def test_a_file_whose_header_does_not_match_is_not_guessed_at(tmp_path):
     path = table_path(tmp_path)
-    path.write_text("sample_id,dataset\na,genai\n")
+    path.write_text("sample_id,dataset\na,genai\n", encoding="utf-8")
     with pytest.raises(ScoreTableError, match="expected the header"):
         ScoreTable.load(path)
 
@@ -538,7 +538,7 @@ def test_a_row_never_written_is_the_same_row_as_the_row_it_writes(tmp_path):
     read_back = ScoreTable.load(path).rows[0]
     assert read_back == fresh
     assert (fresh.score, fresh.confidence, fresh.latency_ms) == (0.333333, 0.666667, 12.3457)
-    text = path.read_text().splitlines()[1]
+    text = path.read_text(encoding="utf-8").splitlines()[1]
     assert "0.333333" in text and "0.3333333333" not in text
 
 

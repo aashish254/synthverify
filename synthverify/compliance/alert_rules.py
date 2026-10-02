@@ -133,7 +133,7 @@ def load_rules(path: Path) -> tuple[list[dict[str, Any]], list[RuleIssue]]:
     if not path.is_file():
         return [], [RuleIssue("missing", f"{path} does not exist")]
     try:
-        document = yaml.safe_load(path.read_text())
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:  # the whole point of clause 2
         # `MarkedYAMLError.problem_mark` is Optional per the stubs; a parser error with no mark
         # is unusual but legal, so fall through to no location suffix rather than assume one.
@@ -195,7 +195,7 @@ def metric_literals(package_dir: Path) -> dict[str, list[str]]:
     """Every ``synthverify_…`` string literal in the package, with the files that contain it."""
     found: dict[str, list[str]] = {}
     for source in sorted(package_dir.rglob("*.py")):
-        for match in _METRIC_LITERAL.finditer(source.read_text()):
+        for match in _METRIC_LITERAL.finditer(source.read_text(encoding="utf-8")):
             found.setdefault(match.group(1), []).append(source.name)
     return found
 

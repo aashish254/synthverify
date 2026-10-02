@@ -274,7 +274,7 @@ def read_lock(path: Path | str = LOCK_PATH) -> tuple[dict[str, Pin], list[LockIs
     if not lock.is_file():
         issues.append(LockIssue("missing", f"{lock} does not exist: the image installs unpinned"))
         return pins, issues
-    for number, raw in enumerate(lock.read_text().splitlines(), start=1):
+    for number, raw in enumerate(lock.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
@@ -395,5 +395,5 @@ def write_lock(project_root: Path | str = ".", lock_path: Path | str = LOCK_PATH
         assert platform_pin is not None  # every PLATFORM_PINS key is a literal, valid name
         pins.setdefault(platform_pin.key, Pin(name, version))
     body = "\n".join(str(pin) for _, pin in sorted(pins.items(), key=lambda kv: kv[1].name.lower()))
-    Path(lock_path).write_text(HEADER + body + "\n")
+    Path(lock_path).write_text(HEADER + body + "\n", encoding="utf-8")
     return check_lock(project_root, lock_path)

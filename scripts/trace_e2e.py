@@ -75,6 +75,10 @@ from synthverify.compliance.alert_rules import check_alert_rules, metrics_in_exp
 from synthverify.metrics import HELP_TEXTS  # noqa: E402
 from synthverify.tracing import is_valid_trace_id, parse_traceparent  # noqa: E402
 
+# Children inherit the OS locale for stdio (cp1252 on Windows). Every text-mode spawn in this
+# file names encoding="utf-8", so the child has to be UTF-8 too or the two ends disagree.
+os.environ.setdefault("PYTHONUTF8", "1")
+
 API = "/api/v1"
 IMAGE = "postgres:16"
 ADMIN_KEY = "sv_live_trace_e2e_admin_0000000000000000"
@@ -148,7 +152,7 @@ def server_url(args: argparse.Namespace):
         ["docker", "run", "-d", "--name", container,
          "-e", "POSTGRES_USER=sv", "-e", "POSTGRES_PASSWORD=sv", "-e", "POSTGRES_DB=postgres",
          "-p", f"{args.port}:5432", IMAGE],
-        check=True, capture_output=True, text=True,
+        check=True, capture_output=True, text=True, encoding="utf-8",
     )
     url = f"postgresql+pg8000://sv:sv@127.0.0.1:{args.port}/postgres"
     try:
@@ -165,10 +169,10 @@ def server_url(args: argparse.Namespace):
         yield url
     finally:
         subprocess.run(["docker", "rm", "-f", container], check=False,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8")
         left = subprocess.run(
             ["docker", "ps", "-a", "--filter", f"name={container}", "--format", "{{.Names}}"],
-            check=False, capture_output=True, text=True,
+            check=False, capture_output=True, text=True, encoding="utf-8",
         ).stdout.strip()
         print(f"removed container {container}; left behind: {left or 'none'}")
 
@@ -260,15 +264,15 @@ def package_root(mode: str, scratch: Path):
                     ignore=shutil.ignore_patterns("__pycache__"))
     patch = PATCHES[mode]
     target = root / patch.file
-    text = target.read_text()
+    text = target.read_text(encoding="utf-8")
     if patch.append:
         assert patch.new not in text, f"{target} already carries the mutation"
-        target.write_text(text + patch.new)
+        target.write_text(text + patch.new, encoding="utf-8")
     else:
         count = text.count(patch.old)
         if not count:
             raise RuntimeError(f"mutation {mode} is stale: {patch.old!r} is no longer in {patch.file}")
-        target.write_text(text.replace(patch.old, patch.new))
+        target.write_text(text.replace(patch.old, patch.new), encoding="utf-8")
     print(f"  [mutation {mode}] {patch.describe()} ({'1' if patch.append else count} place(s))")
     yield root
 
@@ -288,7 +292,7 @@ class Child:
     def output(self) -> str:
         for _ in range(20):
             try:
-                return self.log.read_text(errors="replace")
+                return self.log.read_text(errors="replace", encoding="utf-8")
             except OSError:
                 time.sleep(0.25)
         return ""
@@ -312,10 +316,10 @@ class Child:
 
 def spawn(label: str, root: Path, args: list[str], env: dict[str, str], scratch: Path) -> Child:
     log = scratch / f"{label}.log"
-    handle = log.open("w")
+    handle = log.open("w", encoding="utf-8")
     proc = subprocess.Popen(
         [sys.executable, *args], cwd=root, env=env,
-        stdout=handle, stderr=subprocess.STDOUT, text=True,
+        stdout=handle, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
     )
     print(f"  started {label} (pid {proc.pid}) with package root {root}")
     return Child(label=label, proc=proc, log=log, handle=handle)
@@ -576,7 +580,7 @@ def phase_rules(text: str, root: Path) -> None:
         not absent,
         absent or f"{list(RUN_SCAPED)}",
     )
-    document = yaml.safe_load(RULES.read_text()) or {}
+    document = yaml.safe_load(RULES.read_text(encoding="utf-8")) or {}
     referenced: set[str] = set()
     for group in document.get("groups", []):
         for rule in group.get("rules", []):

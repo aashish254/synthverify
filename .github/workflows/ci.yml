@@ -171,15 +171,25 @@ jobs:
           suite = ET.parse("result.xml").getroot()
           suite = suite if suite.tag == "testsuite" else suite.find("testsuite")
           tests, failures, errors = (int(suite.get(k) or 0) for k in ("tests", "failures", "errors"))
+          nodes = list(ET.parse("result.xml").iter("skipped"))
           skipped = int(suite.get("skipped") or 0)
           print(f"{tests} tests, {failures} failures, {errors} errors, {skipped} skipped")
           if failures or errors:
               sys.exit("the suite failed on this platform")
           if skipped:
-              reasons = sorted({(node.get("message") or "").split(":")[0] for node in ET.parse("result.xml").iter("skipped")})
+              reasons = sorted({(node.get("message") or "").split(":")[0] for node in nodes})
               print("skip reasons:", reasons)
-          if skipped > 21:
-              sys.exit(f"{skipped} skips on a job that expects at most 21 service skips")
+          # Windows is allowed exactly two more skips, and they are allowed *by name*: the mode-bit
+          # cases whose subject (a POSIX permission triple) has no referent on NTFS, marked in
+          # tests/test_release_hygiene.py. Checked on both platforms, so a third decorated skip fails
+          # on Windows and an unused allowance fails everywhere else.
+          mode_bits = sum(1 for node in nodes if (node.get("message") or "").startswith("POSIX mode bits:"))
+          expected_mode_bits = 2 if sys.platform == "win32" else 0
+          if mode_bits != expected_mode_bits:
+              sys.exit(f"{mode_bits} mode-bit skips on {sys.platform}; exactly {expected_mode_bits} are allowed")
+          ceiling = 21 + expected_mode_bits
+          if skipped > ceiling:
+              sys.exit(f"{skipped} skips on a job that expects at most {ceiling} (21 service + {mode_bits} mode-bit)")
           PY
 
 

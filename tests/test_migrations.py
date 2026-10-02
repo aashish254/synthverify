@@ -308,7 +308,7 @@ class TestDeployEntryPoint:
             text=True,
             cwd=str(Path(os.sep)),
             env={**os.environ, "PYTHONPATH": str(PROJECT)},
-            timeout=120,
+            timeout=120, encoding="utf-8",
         )
 
     def test_cli_creates_the_schema_from_an_unrelated_directory(self, tmp_path):

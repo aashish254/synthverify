@@ -1007,7 +1007,7 @@ class TestAlertRulesShip:
         """Counted from the file itself, and from the mount instructions a reviewer needs to load it."""
         from synthverify.compliance.alert_rules import DEFAULT_RULES_PATH
 
-        text = (REPO / DEFAULT_RULES_PATH).read_text()
+        text = (REPO / DEFAULT_RULES_PATH).read_text(encoding="utf-8")
         assert text.count("- alert:") >= 10
         assert "rule_files" in text and "prometheus.yml" in text
 
@@ -1047,10 +1047,10 @@ class TestAlertRulesShip:
     def _mutated(self, tmp_path, mutate) -> Path:
         from synthverify.compliance.alert_rules import DEFAULT_RULES_PATH
 
-        document = yaml.safe_load((REPO / DEFAULT_RULES_PATH).read_text())
+        document = yaml.safe_load((REPO / DEFAULT_RULES_PATH).read_text(encoding="utf-8"))
         mutate(document)
         path = tmp_path / "rules.yml"
-        path.write_text(yaml.safe_dump(document, sort_keys=False, width=400))
+        path.write_text(yaml.safe_dump(document, sort_keys=False, width=400), encoding="utf-8")
         return path
 
     def test_renamed_metric_is_caught(self, tmp_path):
@@ -1069,7 +1069,7 @@ class TestAlertRulesShip:
         """An alert with no `for` pages on a single blip, so the file promises every rule has one."""
         from synthverify.compliance.alert_rules import check_alert_rules
 
-        document = yaml.safe_load((REPO / "docker" / "prometheus-alerts.yml").read_text())
+        document = yaml.safe_load((REPO / "docker" / "prometheus-alerts.yml").read_text(encoding="utf-8"))
         shipped = document["groups"][0]["rules"]
         assert shipped and all(str(rule.get("for", "")).strip() for rule in shipped), "a shipped rule has no `for`"
 
@@ -1105,7 +1105,7 @@ class TestAlertRulesShip:
         from synthverify.compliance.alert_rules import check_alert_rules
 
         path = tmp_path / "broken.yml"
-        path.write_text("groups:\n  - name: a\n    rules:\n      - alert: b\n       bad: [unclosed\n")
+        path.write_text("groups:\n  - name: a\n    rules:\n      - alert: b\n       bad: [unclosed\n", encoding="utf-8")
         report = check_alert_rules(REPO, rules_path=path)
         assert {issue.kind for issue in report.issues} == {"unparseable"}
         assert "line" in report.format_text().lower()
@@ -1122,7 +1122,7 @@ class TestAlertRulesShip:
 
         package = tmp_path / "synthverify"
         package.mkdir()
-        (package / "extra.py").write_text('METRIC = "synthverify_invented_total"\n')
+        (package / "extra.py").write_text('METRIC = "synthverify_invented_total"\n', encoding="utf-8")
         report = check_alert_rules(tmp_path, rules_path=REPO / "docker" / "prometheus-alerts.yml")
         kinds = {issue.kind for issue in report.issues}
         assert {"undeclared-metric", "dead-declaration"} <= kinds
@@ -1137,7 +1137,7 @@ class TestAlertRulesShip:
             cwd=REPO,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=300, encoding="utf-8",
         )
         assert result.returncode == 0, result.stdout + result.stderr
         assert "RESULT: PASS" in result.stdout and "prometheus-alerts.yml" in result.stdout

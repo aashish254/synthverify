@@ -355,7 +355,7 @@ class TestCLIAndAuditOffline:
             text=True,
             cwd=str(PROJECT),
             env=merged,
-            timeout=180,
+            timeout=180, encoding="utf-8",
         )
 
     def test_cli_analyze_succeeds_with_no_network(self, tmp_path):

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import struct
+import tempfile
 import wave
 from pathlib import Path
 
@@ -200,9 +201,12 @@ def natural_video(frames: int = 24, width: int = 176, height: int = 144, fps: in
         d.ellipse([x, 18, x + 44, 62], fill=(200, 90, 60))
         d.rectangle([x + 60, 76, x + 124, 138], fill=(60, 140, 90))
         imgs.append(img)
-    path = Path("/tmp/_sv_nat_video.avi")
-    write_mjpeg_avi(path, imgs, fps=fps)
-    return path.read_bytes()
+    # A real file, not a BytesIO: `write_mjpeg_avi` seeks back to patch the RIFF size, and
+    # tempfile.gettempdir() because `/tmp` is this machine's path, not a portable one.
+    with tempfile.TemporaryDirectory(prefix="sv-nat-video-") as tmp:
+        path = Path(tmp) / "natural.avi"
+        write_mjpeg_avi(path, imgs, fps=fps)
+        return path.read_bytes()
 
 
 def deepfake_video(frames: int = 24, size: int = 256, fps: int = 10) -> bytes:
@@ -222,9 +226,10 @@ def deepfake_video(frames: int = 24, size: int = 256, fps: int = 10) -> bytes:
         d.ellipse([x, 60, x + 90, 150], fill=(180, 140, 110))  # "face"
         imgs.append(img)
     imgs = imgs + imgs[:6]  # duplicated segment (loop splice)
-    path = Path("/tmp/_sv_df_video.avi")
-    write_mjpeg_avi(path, imgs, fps=fps)
-    return path.read_bytes()
+    with tempfile.TemporaryDirectory(prefix="sv-df-video-") as tmp:
+        path = Path(tmp) / "deepfake.avi"
+        write_mjpeg_avi(path, imgs, fps=fps)
+        return path.read_bytes()
 
 
 # ----------------------------------------------------------------------- text

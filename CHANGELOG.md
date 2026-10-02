@@ -424,9 +424,12 @@ local re-derivation of each failure, on a tree where the Docker daemon is down f
 so `make airgap`, `make scale`, `make ledger-postgres`, `make docker`, `make lock-e2e` and the Windows
 suite itself have **not** been re-run locally — the labelled rows in §2.5 of `README.md` stay
 **RE-MEASURE PENDING**, and the next hosted run is the witness for those seven jobs. Notably unproven until
-then: the Windows *test suite* has never executed past `doctor.py`, so its pytest counts are not quotable
-at any size; nothing in `tests/` skips on `sys_platform`, so the ≤21-skip ceiling should hold there, but
-"should" is not a measurement and no row claims it.
+then: the Windows *test suite* had never got as far as `pytest`, because the doctor stopped the job first.
+**Corrected by run #2, below:** that prediction was right about the job and wrong about the cause it would
+next meet — Windows did reach `Run test suite`, and the sentence this section wrote as "nothing in `tests/`
+skips on `sys_platform`, so the ≤21-skip ceiling should hold there" turned out to be the *second* thing that
+needed measuring: two POSIX mode-bit cases have no referent on NTFS, and the ceiling is now 21 + 2 named
+skips rather than an untested 21. See the T63 entry.
 
 ## [1.0.0] — 2026-09-27
 

@@ -54,6 +54,10 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+# Children inherit the OS locale for stdio (cp1252 on Windows). Every text-mode spawn in this
+# file names encoding="utf-8", so the child has to be UTF-8 too or the two ends disagree.
+os.environ.setdefault("PYTHONUTF8", "1")
+
 REPO = Path(__file__).resolve().parent.parent
 SUITE = "tests/test_audit_checkpoints.py"
 MUTATIONS = (
@@ -206,14 +210,14 @@ def shadow_root(mode: str, scratch: Path):
     if mode:
         patch = PATCHES[mode]
         target = root / patch.file
-        text = target.read_text()
+        text = target.read_text(encoding="utf-8")
         hits = text.count(patch.old)
         if hits != 1:
             raise RuntimeError(
                 f"mutation {mode} is stale: its target appears {hits} times in {patch.file}, "
                 "not exactly once - re-quote it against the current source"
             )
-        target.write_text(text.replace(patch.old, patch.new))
+        target.write_text(text.replace(patch.old, patch.new), encoding="utf-8")
         print(f"  [mutation {mode}] {patch.why}")
     yield root
 
@@ -250,7 +254,7 @@ def run_suite(root: Path, scratch: Path, junit: Path) -> tuple[int, int, list[st
         env=env,
         capture_output=True,
         text=True,
-        timeout=900,
+        timeout=900, encoding="utf-8",
     )
     if not junit.exists():
         raise RuntimeError(f"the suite produced no junit:\n{proc.stdout[-3000:]}{proc.stderr[-2000:]}")
@@ -276,7 +280,7 @@ def check_anchors() -> int:
     """
     bad = 0
     for mode, patch in PATCHES.items():
-        text = (REPO / patch.file).read_text()
+        text = (REPO / patch.file).read_text(encoding="utf-8")
         hits = text.count(patch.old)
         if hits != 1:
             bad += 1

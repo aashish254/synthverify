@@ -121,7 +121,7 @@ def matches(cell: dict, row: dict, truth: int) -> bool:
 
 
 def run(plan_path: Path, out: Path, provenance: Path, *, limit_bytes: int, dry: bool) -> int:
-    plan = json.loads(plan_path.read_text())
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
     if not isinstance(plan, list) or not plan:
         raise FetchError(f"{plan_path}: a plan is a non-empty JSON list of cells")
     seen: set[str] = set()
@@ -161,7 +161,7 @@ def run(plan_path: Path, out: Path, provenance: Path, *, limit_bytes: int, dry: 
         if provenance.exists():
             # One line per image, so a resumed pass re-reads what it already recorded and stays quiet
             # about it rather than appending a second copy of the same fact.
-            for line in provenance.read_text().splitlines():
+            for line in provenance.read_text(encoding="utf-8").splitlines():
                 try:
                     earlier = json.loads(line)
                 except json.JSONDecodeError:

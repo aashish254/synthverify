@@ -274,7 +274,7 @@ class TestJobQueueSummary:
         assert Job().to_dict()["recommended_action"] is None
 
     def test_the_console_reads_the_flat_key_not_the_omitted_report(self):
-        html = (Path(synthverify.__file__).parent / "dashboard" / "index.html").read_text()
+        html = (Path(synthverify.__file__).parent / "dashboard" / "index.html").read_text(encoding="utf-8")
         rows = [line for line in html.splitlines() if "recommended_action" in line and "j." in line]
         assert rows, "the jobs table no longer renders an action column"
         assert all("j.result" not in line for line in rows), rows

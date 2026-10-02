@@ -47,7 +47,7 @@ IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 def load_records(provenance: Path) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
-    for lineno, line in enumerate(provenance.read_text().splitlines(), start=1):
+    for lineno, line in enumerate(provenance.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
         try:

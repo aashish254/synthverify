@@ -54,6 +54,10 @@ if str(REPO) not in sys.path:
 
 import httpx  # noqa: E402
 
+# Children inherit the OS locale for stdio (cp1252 on Windows). Every text-mode spawn in this
+# file names encoding="utf-8", so the child has to be UTF-8 too or the two ends disagree.
+os.environ.setdefault("PYTHONUTF8", "1")
+
 PROBE = REPO / "scripts" / "ratelimit_probe.py"
 ADMIN_KEY = "sv_live_ratelimit_e2e_admin_00000000000"
 API = "/api/v1"
@@ -102,16 +106,16 @@ def valkey_server(image: str, url: str):
     subprocess.run(
         ["docker", "run", "-d", "--name", name, "-p", f"127.0.0.1:{port}:6379", image,
          "--save", "", "--appendonly", "no"],
-        check=True, capture_output=True, text=True,
+        check=True, capture_output=True, text=True, encoding="utf-8",
     )
     try:
         wait_for_pong(("127.0.0.1", port))
         yield Server(host="127.0.0.1", port=port, container=name)
     finally:
-        subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True, text=True)
+        subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True, text=True, encoding="utf-8")
         left = subprocess.run(
             ["docker", "ps", "-a", "--filter", f"name={name}", "--format", "{{.Names}}"],
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, check=False, encoding="utf-8",
         ).stdout.strip()
         print(f"removed container {name}; left behind: {left or 'none'}")
 
@@ -157,7 +161,7 @@ def run_probes(env: dict[str, str], count: int = 2) -> list[dict]:
     procs = [
         subprocess.Popen(
             [sys.executable, str(PROBE)],
-            cwd=REPO, env={**os.environ, **env}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            cwd=REPO, env={**os.environ, **env}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
         )
         for _ in range(count)
     ]
@@ -214,7 +218,7 @@ def app_process(port: int, server: Server, scratch: Path):
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "synthverify.app:app",
          "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
-        cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
     )
     base = f"http://127.0.0.1:{port}"
     try:
@@ -348,7 +352,7 @@ def phase_outage(args: argparse.Namespace, client: httpx.Client, server: Server)
     """Stop the shared backend under a running app: `AC-INFRA-3(b)`, in both costumes."""
     if server.container:
         print(f"stopping container {server.container}")
-        subprocess.run(["docker", "stop", server.container], check=True, capture_output=True, text=True)
+        subprocess.run(["docker", "stop", server.container], check=True, capture_output=True, text=True, encoding="utf-8")
     codes, retries, seconds = burst_requests(client, new_key(client, "http-outage"), 9)
     check(
         "with the shared backend stopped, the request path still answers 200/429 and never 500s",
@@ -412,7 +416,7 @@ def phase_outage(args: argparse.Namespace, client: httpx.Client, server: Server)
 def phase_recovery(args: argparse.Namespace, client: httpx.Client, server: Server) -> None:
     """A limiter that degrades and never returns has quietly become n per-process budgets."""
     print(f"restarting container {server.container}")
-    subprocess.run(["docker", "start", server.container], check=True, capture_output=True, text=True)
+    subprocess.run(["docker", "start", server.container], check=True, capture_output=True, text=True, encoding="utf-8")
     wait_for_pong(server.target)
     time.sleep(2.5)  # the app's fallback cooldown is 2s, so its next request must re-probe
     results = run_probes(base_env(args, server, "valkey", f"recovered-{time.time_ns()}"))

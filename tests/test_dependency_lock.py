@@ -38,7 +38,7 @@ def lock_text(*pins: str, header: str = "# test lock\n") -> str:
 class TestReadLock:
     def test_a_pin_reads_as_a_pin(self, tmp_path: Path):
         lock = tmp_path / "lock.txt"
-        lock.write_text(lock_text("fastapi==0.141.1", "typing_extensions==4.16.0"))
+        lock.write_text(lock_text("fastapi==0.141.1", "typing_extensions==4.16.0"), encoding="utf-8")
         pins, issues = read_lock(lock)
         assert issues == []
         assert pins["fastapi"] == Pin("fastapi", "0.141.1")
@@ -57,14 +57,14 @@ class TestReadLock:
     )
     def test_anything_that_is_not_a_pin_is_rejected(self, tmp_path: Path, line: str):
         lock = tmp_path / "lock.txt"
-        lock.write_text(lock_text(line))
+        lock.write_text(lock_text(line), encoding="utf-8")
         pins, issues = read_lock(lock)
         assert [i.kind for i in issues] == ["unpinned"], pins
         assert line in issues[0].detail
 
     def test_pinning_the_same_package_twice_is_a_problem(self, tmp_path: Path):
         lock = tmp_path / "lock.txt"
-        lock.write_text(lock_text("numpy==1.26.4", "numpy==2.4.6"))
+        lock.write_text(lock_text("numpy==1.26.4", "numpy==2.4.6"), encoding="utf-8")
         _, issues = read_lock(lock)
         assert "duplicate" in {i.kind for i in issues}
 
@@ -75,7 +75,7 @@ class TestReadLock:
 
     def test_comments_and_blank_lines_are_not_packages(self, tmp_path: Path):
         lock = tmp_path / "lock.txt"
-        lock.write_text("# why\n\n   # also why\nnumpy==2.4.6\n")
+        lock.write_text("# why\n\n   # also why\nnumpy==2.4.6\n", encoding="utf-8")
         pins, issues = read_lock(lock)
         assert issues == [] and list(pins) == ["numpy"]
 
@@ -138,16 +138,16 @@ class TestCheckLock:
         assert check_lock(REPO_ROOT, LOCK_PATH).ok
 
     def test_dropping_a_pin_is_reported_as_unpinned(self, tmp_path: Path):
-        good = LOCK_PATH.read_text()
+        good = LOCK_PATH.read_text(encoding="utf-8")
         kept = [line for line in good.splitlines() if not line.startswith("numpy==")]
         broken = tmp_path / "lock.txt"
-        broken.write_text("\n".join(kept) + "\n")
+        broken.write_text("\n".join(kept) + "\n", encoding="utf-8")
         report = check_lock(REPO_ROOT, broken)
         assert [i.kind for i in report.issues if i.detail.startswith("numpy")] == ["unpinned"]
 
     def test_a_changed_pin_is_reported_as_drift(self, tmp_path: Path):
         broken = tmp_path / "lock.txt"
-        broken.write_text(LOCK_PATH.read_text().replace("anyio==4.14.2", "anyio==4.15.1", 1))
+        broken.write_text(LOCK_PATH.read_text(encoding="utf-8").replace("anyio==4.14.2", "anyio==4.15.1", 1), encoding="utf-8")
         report = check_lock(REPO_ROOT, broken)
         drift = [i for i in report.issues if i.kind == "drift"]
         assert [i.detail for i in drift] == [
@@ -156,14 +156,14 @@ class TestCheckLock:
 
     def test_a_pin_nothing_declares_is_stale(self, tmp_path: Path):
         stale = tmp_path / "lock.txt"
-        stale.write_text(LOCK_PATH.read_text() + "some-forgotten-package==1.2.3\n")
+        stale.write_text(LOCK_PATH.read_text(encoding="utf-8") + "some-forgotten-package==1.2.3\n", encoding="utf-8")
         report = check_lock(REPO_ROOT, stale)
         assert [i.kind for i in report.issues] == ["stale"]
         assert "some-forgotten-package" in report.issues[0].detail
 
     def test_a_base_image_tool_is_stale_but_says_what_it_is(self, tmp_path: Path):
         lock = tmp_path / "lock.txt"
-        lock.write_text(LOCK_PATH.read_text() + "pip==24.0\n")
+        lock.write_text(LOCK_PATH.read_text(encoding="utf-8") + "pip==24.0\n", encoding="utf-8")
         detail = check_lock(REPO_ROOT, lock).issues[0].detail
         assert "base-image tool" in detail
 
@@ -183,16 +183,17 @@ class TestCheckLock:
         without = tmp_path / "without.txt"
         without.write_text(
             "\n".join(
-                line for line in LOCK_PATH.read_text().splitlines() if not line.startswith("greenlet==")
+                line for line in LOCK_PATH.read_text(encoding="utf-8").splitlines() if not line.startswith("greenlet==")
             )
-            + "\n"
+            + "\n",
+            encoding="utf-8",
         )
         issues = check_lock(REPO_ROOT, without).issues
         assert [i.kind for i in issues if "ships on another platform" in i.detail] == ["unpinned"], issues
         assert {i.detail.split()[0].rstrip(":") for i in issues} == {"greenlet"}, issues
 
         disagreed = tmp_path / "disagreed.txt"
-        disagreed.write_text(LOCK_PATH.read_text().replace("greenlet==3.5.6", "greenlet==9.9.9", 1))
+        disagreed.write_text(LOCK_PATH.read_text(encoding="utf-8").replace("greenlet==3.5.6", "greenlet==9.9.9", 1), encoding="utf-8")
         moved = check_lock(REPO_ROOT, disagreed).issues
         assert [i.detail.split()[0].rstrip(":") for i in moved] == ["greenlet"], moved
         # Either report quotes both sides, so the reader can tell which one to fix.
@@ -220,16 +221,18 @@ class TestCheckLock:
         without = tmp_path / "without.txt"
         without.write_text(
             "\n".join(
-                line for line in LOCK_PATH.read_text().splitlines() if not line.startswith("colorama==")
+                line for line in LOCK_PATH.read_text(encoding="utf-8").splitlines() if not line.startswith("colorama==")
             )
-            + "\n"
+            + "\n",
+            encoding="utf-8",
         )
         issues = [i for i in check_lock(REPO_ROOT, without).issues if "colorama" in i.detail]
         assert [i.kind for i in issues] == ["unpinned"], issues
 
         disagreed = tmp_path / "disagreed.txt"
         disagreed.write_text(
-            LOCK_PATH.read_text().replace("colorama==0.4.6", "colorama==0.3.9", 1)
+            LOCK_PATH.read_text(encoding="utf-8").replace("colorama==0.4.6", "colorama==0.3.9", 1),
+            encoding="utf-8",
         )
         moved = [i for i in check_lock(REPO_ROOT, disagreed).issues if "colorama" in i.detail]
         assert [i.kind for i in moved] == ["target-drift"], moved
@@ -243,7 +246,7 @@ class TestCheckLock:
         line - and it is *reported*, because an exemption nobody can see is how a stale pin hides.
         """
         lock = tmp_path / "lock.txt"
-        lock.write_text(LOCK_PATH.read_text() + "async-timeout==5.4.2\n")
+        lock.write_text(LOCK_PATH.read_text(encoding="utf-8") + "async-timeout==5.4.2\n", encoding="utf-8")
         report = check_lock(REPO_ROOT, lock)
         assert report.ok, report.format_text()
         assert "async-timeout==5.4.2" in report.exempted
@@ -259,7 +262,7 @@ class TestCheckLock:
         assert all(name in pins for name in PLATFORM_PINS)
 
     def test_the_header_explains_itself(self):
-        text = LOCK_PATH.read_text()
+        text = LOCK_PATH.read_text(encoding="utf-8")
         assert text.startswith(HEADER.splitlines()[0])
         for phrase in ("constraints", "Dockerfile.postgres", "greenlet", "colorama", "PEP 517"):
             assert phrase in text
@@ -294,7 +297,7 @@ class TestCli:
 
     def test_a_broken_lock_exits_nonzero(self, tmp_path: Path):
         broken = tmp_path / "lock.txt"
-        broken.write_text("# nothing pinned\n")
+        broken.write_text("# nothing pinned\n", encoding="utf-8")
         assert cli_main(["dependency-lock", "--lock", str(broken)]) == 1
 
     def test_freedom_includes_the_lock_check(self):
@@ -305,7 +308,7 @@ class TestCli:
 
         result = subprocess.run(
             [sys.executable, "-m", "synthverify.cli", "freedom"],
-            capture_output=True, text=True, cwd=REPO_ROOT, check=False,
+            capture_output=True, text=True, cwd=REPO_ROOT, check=False, encoding="utf-8",
         )
         assert result.returncode == 0, result.stdout + result.stderr
         assert "Dependency lock:" in result.stdout
