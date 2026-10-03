@@ -109,10 +109,16 @@ def test_a_dry_run_over_a_scanned_dir_previews_the_split_it_would_commit(tmp_pat
     assert previewed is not None, printed
 
     assert cli_main(["score", *scan_args(root, out)]) == 0
-    capsys.readouterr()
+    printed = capsys.readouterr().out
+    # Normalize for cross-platform path comparison; Windows uses backslashes.
+    normalized_printed = printed.replace("\\", "/")
+    manifest_str = str(Path(out["manifest"]).as_posix())
+    split_file_str = str(Path(out["split-file"]).as_posix())
     assert previewed.group(1) == sha(out["split-file"]), (
         "the digest is a property of the content, not of the write"
     )
+    assert f"manifest     : {manifest_str}  sha256 {sha(out['manifest'])}" in normalized_printed
+    assert f"split file   : {split_file_str}  sha256 {sha(out['split-file'])}" in normalized_printed
 
 
 def test_a_real_run_prints_the_digest_of_each_artefact_it_committed(tmp_path, capsys):
@@ -120,9 +126,14 @@ def test_a_real_run_prints_the_digest_of_each_artefact_it_committed(tmp_path, ca
     out = paths(tmp_path)
     assert cli_main(["score", *scan_args(root, out)]) == 0
     printed = capsys.readouterr().out
-    assert f"manifest     : {out['manifest']}  sha256 {sha(out['manifest'])}" in printed
-    assert f"split file   : {out['split-file']}  sha256 {sha(out['split-file'])}" in printed
-    # Six samples, one detector: the header plus six rows, and no shortfall hidden in the arithmetic.
+    # Normalize for cross-platform comparison: Windows uses backslashes, macOS/Unix use forward slashes.
+    normalized_printed = printed.replace("\\", "/")
+    manifest_str = str(Path(out["manifest"]).as_posix())
+    split_file_str = str(Path(out["split-file"]).as_posix())
+    table_str = str(Path(out["table"]).as_posix())
+    assert f"manifest     : {manifest_str}  sha256 {sha(out['manifest'])}" in normalized_printed
+    assert f"split file   : {split_file_str}  sha256 {sha(out['split-file'])}" in normalized_printed
+    assert f"table        : {table_str}" in normalized_printed
     assert len(Path(out["table"]).read_text(encoding="utf-8").strip().splitlines()) == 7
     assert "unreadable     : 0" in printed and "unscored       : 0" in printed
 
@@ -552,9 +563,11 @@ def test_the_json_report_carries_the_split_it_measured_and_the_file_that_defined
     ) == 0
     printed = capsys.readouterr().out
     payload = json.loads(printed[printed.index("{") :])
+    # Normalize paths for cross-platform comparison; Windows uses backslashes, others use forward slashes.
+    split_file_posix = Path(out["split-file"]).as_posix()
     assert payload["split"] == {
-        "split_file": out["split-file"],
-        "split_digest": sha(out["split-file"]),
+        "split_file": split_file_posix,
+        "split_digest": sha(Path(split_file_posix)),
         "splits": ["train", "held_out_test"],
         "rows_kept": kept,
         "rows_dropped": 6 - kept,
