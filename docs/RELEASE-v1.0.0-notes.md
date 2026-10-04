@@ -11,7 +11,7 @@ The detectors are fixed signal-processing heuristics — noise residuals, JPEG q
 history, frequency content, ELA, metadata — **not trained models** (no `ml_model` is set on
 any of them). We measured them against a real labelled corpus (2,376 images from
 `OwensLab/CommunityForensics-Eval`'s `CompEval` split, eight generators, held-out AUCs with
-DeLong intervals; full provenance in [`docs/corpus-communityforensics.md`](docs/corpus-communityforensics.md)):
+DeLong intervals; full provenance in [`docs/corpus-communityforensics.md`](corpus-communityforensics.md)):
 
 - Best pooled held-out AUC: `noise` **0.8585** [0.7920, 0.9063]; `frequency` 0.4352,
   `ela` 0.3551, `metadata` 0.0377 — **three of the four reporting detectors land below
@@ -81,10 +81,10 @@ make setup && make test        # no GPU, no model downloads, no telemetry
 make serve                      # or: docker compose -f docker/docker-compose.yml up
 ```
 
-Windows: use the PowerShell path in [`docs/INSTALL.md`](docs/INSTALL.md).
+Windows: use the PowerShell path in [`docs/INSTALL.md`](INSTALL.md).
 Docker-only: `docker build -f docker/Dockerfile -t synthverify:1.0.0 .`
 
 ## License
 
 MIT (`LICENSE`). Corpus provenance and per-source notes:
-[`docs/corpus-communityforensics.md`](docs/corpus-communityforensics.md).
+[`docs/corpus-communityforensics.md`](corpus-communityforensics.md).
