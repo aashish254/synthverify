@@ -563,11 +563,11 @@ def test_the_json_report_carries_the_split_it_measured_and_the_file_that_defined
     ) == 0
     printed = capsys.readouterr().out
     payload = json.loads(printed[printed.index("{") :])
-    # Normalize paths for cross-platform comparison; Windows uses backslashes, others use forward slashes.
-    split_file_posix = Path(out["split-file"]).as_posix()
+    # The payload names the file that defined the split exactly as it was passed on the command
+    # line, so the comparison is against that string verbatim - native separators on every platform.
     assert payload["split"] == {
-        "split_file": split_file_posix,
-        "split_digest": sha(Path(split_file_posix)),
+        "split_file": str(out["split-file"]),
+        "split_digest": sha(out["split-file"]),
         "splits": ["train", "held_out_test"],
         "rows_kept": kept,
         "rows_dropped": 6 - kept,

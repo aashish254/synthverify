@@ -397,8 +397,14 @@ class TestDependencyClosure:
     def test_a_marker_and_an_extra_on_one_line_survive_together(self):
         """Real metadata fuses the conditions (`sys_platform != "win32" and extra ==
         "standard"`). Evaluating such a line without binding `extra` answers false for
-        every optional dependency a project legitimately asked for."""
-        spec = 'httptools>=0.6.3 ; sys_platform != "win32" and extra == "standard"'
+        every optional dependency a project legitimately asked for.
+
+        The fused line is asserted with a version marker rather than the `sys_platform`
+        one because the subject is the `extra` binding: a platform marker makes the
+        conjunction's truth a property of the host running the test, and on the Windows
+        leg it would be False for the right reason about the wrong thing.
+        """
+        spec = 'httptools>=0.6.3 ; python_version >= "3.11" and extra == "standard"'
         assert marker_applies(spec, frozenset()) is False
         assert marker_applies(spec, frozenset({"standard"})) is True
 

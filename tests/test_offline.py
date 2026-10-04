@@ -266,7 +266,10 @@ class TestPipelineOffline:
             asset = session.get(MediaAsset, job.media_id)
         assert asset is not None
         assert asset.external_uri is None
-        assert str(asset.storage_path).startswith("/")  # bytes stayed on this disk
+        # "bytes stayed on this disk" is a claim about absoluteness, not about a leading slash:
+        # a Windows absolute path is `C:\dir\...`. Anything non-absolute would be a URI or a
+        # relative leak, which is what this assertion exists to refuse.
+        assert Path(str(asset.storage_path)).is_absolute()
 
     async def test_external_uri_ingest_is_refused_not_fetched(self, client):
         """By-URL verification would be a network call, so the API refuses it outright."""

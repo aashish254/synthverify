@@ -304,7 +304,10 @@ class SplitAssignment:
     def write(self, path: Path | str) -> Path:
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(self.content(), encoding="utf-8")
+        # `newline="\n"` because the digest is `sha256(content())` and `content()` joins with LF.
+        # The default text-mode write translates LF to os.linesep, which on Windows committed bytes
+        # whose sha256 differed from the digest every record of the run cited.
+        target.write_text(self.content(), encoding="utf-8", newline="\n")
         return target
 
     @classmethod

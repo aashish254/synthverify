@@ -83,10 +83,14 @@ def _bootstrap_admin_key(db: Database) -> str | None:
         out.parent.mkdir(parents=True, exist_ok=True)
         # The mode is applied by the open, not after the write: `write_text` + `chmod` leaves a
         # window where a full admin credential sits at the process umask (0644 on a default host).
-        # `fchmod` then pins it exactly, because the creation mode is masked by umask.
+        # `fchmod` then pins it exactly, because the creation mode is masked by umask. It is a
+        # POSIX call - Windows has no `os.fchmod` and NTFS answers `os.open`'s mode with an ACL
+        # this function cannot set - so where it exists it is used, and the two mode-bit tests
+        # that prove the 0o600 stay named skips on that platform rather than loosened here.
         fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            os.fchmod(handle.fileno(), 0o600)
+            if hasattr(os, "fchmod"):
+                os.fchmod(handle.fileno(), 0o600)
             handle.write(secret + "\n")
         logger.warning("Generated first admin API key and stored it at %s", out)
         return secret

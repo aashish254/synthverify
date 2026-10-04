@@ -74,7 +74,10 @@ class LocalMediaStore(MediaStore):
     def key_for_location(self, location: str) -> str:
         path = self.resolve(location)
         try:
-            return str(path.relative_to(self.root))
+            # `as_posix`, not `str`: the key scheme is `<sha[:2]>/<sha>_<name>` on every backend,
+            # and a Windows `str()` of the same relative path yields backslashes the S3 parity
+            # claims and the retention sweep's key comparisons both read as a different key.
+            return path.relative_to(self.root).as_posix()
         except ValueError:
             # Written by an older deployment with a different root: keep the
             # shard/<sha>_<name> tail, which is the part that is portable.

@@ -443,7 +443,11 @@ class TestTheFirstBootCredential:
                 if marker.name != "skipif":
                     continue
                 if str(marker.kwargs.get("reason", "")).startswith("POSIX mode bits:"):
-                    marked.append((name, bool(marker.kwargs.get("condition"))))
+                    # `skipif` stores the condition positionally (`args[0]`); reading it from
+                    # `kwargs` returns None on every platform, which made this gate read
+                    # "marks inactive" on Windows too and fail its own claim there.
+                    condition = marker.args[0] if marker.args else marker.kwargs.get("condition", False)
+                    marked.append((name, bool(condition)))
         assert len(marked) == 2, marked
         expected_active = os.name == "nt"
         assert {active for _, active in marked} == {expected_active}, (

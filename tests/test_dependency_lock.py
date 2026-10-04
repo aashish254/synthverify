@@ -9,6 +9,7 @@ committed artifact of this repository is internally consistent - which is what C
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -123,14 +124,22 @@ class TestClosureVersions:
         This is the half of the design that keeps a platform rule from becoming a table somebody
         forgets to maintain: `click` on this machine carries `colorama; platform_system == "Windows"`,
         and that line - not a hand-written allowance - is what makes a `colorama` pin here defensible
-        on darwin and checkable on Windows.
+        on darwin and checkable on Windows. "Checkable on Windows" is the other half of this test:
+        on a win32 host the polarity flips - colorama is genuinely installed, so its version is
+        compared rather than exempted, while uvloop hides behind `sys_platform != "win32"` and earns
+        its exemption from uvicorn's metadata line.
         """
         _versions, _groups, inert = closure_versions(REPO_ROOT)
-        assert "colorama" in inert
-        assert "click" in inert["colorama"] and "Windows" in inert["colorama"]
-        # A marker that *passes* here is not inert: uvloop is installed on darwin, so its pin is
-        # compared against a real version rather than exempted.
-        assert "uvloop" not in inert
+        if sys.platform == "win32":
+            assert "colorama" not in inert, "installed here, so its pin is a fact, not an exemption"
+            assert "uvloop" in inert
+            assert "uvicorn" in inert["uvloop"] and "win32" in inert["uvloop"]
+        else:
+            assert "colorama" in inert
+            assert "click" in inert["colorama"] and "Windows" in inert["colorama"]
+            # A marker that *passes* here is not inert: uvloop is installed on darwin, so its pin is
+            # compared against a real version rather than exempted.
+            assert "uvloop" not in inert
 
 
 class TestCheckLock:
@@ -227,7 +236,16 @@ class TestCheckLock:
             encoding="utf-8",
         )
         issues = [i for i in check_lock(REPO_ROOT, without).issues if "colorama" in i.detail]
-        assert [i.kind for i in issues] == ["unpinned"], issues
+        # A host where colorama is genuinely installed reports the stripped pin twice: the closure
+        # finding (`in the closure ... no lock entry`) and the exempt-pin presence requirement.
+        # On darwin/linux only the latter can fire - no closure there contains colorama - which is
+        # exactly the asymmetry the pin exists to survive.
+        expected = 2 if sys.platform == "win32" else 1
+        assert [i.kind for i in issues] == ["unpinned"] * expected, issues
+        if sys.platform == "win32":
+            assert any("in the closure" in i.detail for i in issues), issues
+        else:
+            assert any("ships on another platform" in i.detail for i in issues), issues
 
         disagreed = tmp_path / "disagreed.txt"
         disagreed.write_text(
@@ -235,8 +253,16 @@ class TestCheckLock:
             encoding="utf-8",
         )
         moved = [i for i in check_lock(REPO_ROOT, disagreed).issues if "colorama" in i.detail]
-        assert [i.kind for i in moved] == ["target-drift"], moved
-        assert "0.4.6" in moved[0].detail and "MATRIX_PLATFORM_PINS" in moved[0].detail
+        # Where the package is really installed, a disagreeing pin is caught by the stronger check:
+        # lock-vs-installed `drift`, quoting both versions - this is the run the pin's version was
+        # measured on. Where no install can witness it, the only possible report is that the lock
+        # and MATRIX_PLATFORM_PINS disagree with each other (`target-drift`).
+        if sys.platform == "win32":
+            assert [i.kind for i in moved] == ["drift"], moved
+            assert "0.3.9" in moved[0].detail and "0.4.6" in moved[0].detail, moved
+        else:
+            assert [i.kind for i in moved] == ["target-drift"], moved
+            assert "0.4.6" in moved[0].detail and "MATRIX_PLATFORM_PINS" in moved[0].detail
 
     def test_a_pin_inert_on_this_platform_is_exempted_with_its_evidence_printed(self, tmp_path: Path):
         """The `stale` direction may not accuse a pin this platform simply does not install.
@@ -273,7 +299,24 @@ class TestWriteLock:
         written = tmp_path / "lock.txt"
         report = write_lock(REPO_ROOT, written)
         assert report.ok, report.format_text()
-        assert read_lock(written)[0] == read_lock(LOCK_PATH)[0]
+        if sys.platform == "win32":
+            # The committed lock is a darwin closure plus PLATFORM_PINS; a Windows closure
+            # genuinely cannot hold the `sys_platform != "win32"` members, so byte-for-byte
+            # equality with the file is a same-platform-as-the-mint claim. What must hold on
+            # every platform: regeneration drops nothing this host's own metadata walk cannot
+            # evidence as inert, adds nothing the committed lock does not already pin, and
+            # changes no version it can check - the environment installed under these very
+            # constraints, so shared pins must agree exactly.
+            _versions, _groups, inert = closure_versions(REPO_ROOT)
+            written_pins, _ = read_lock(written)
+            committed_pins, _ = read_lock(LOCK_PATH)
+            dropped = set(committed_pins) - set(written_pins)
+            assert dropped <= set(inert), f"regeneration dropped non-inert pins: {sorted(dropped - set(inert))}"
+            assert set(written_pins) - set(committed_pins) == set()
+            for key in set(written_pins) & set(committed_pins):
+                assert written_pins[key].version == committed_pins[key].version, key
+        else:
+            assert read_lock(written)[0] == read_lock(LOCK_PATH)[0]
 
     def test_it_refuses_to_write_a_lock_with_holes_in_it(self, tmp_path: Path):
         pyproject = tmp_path / "pyproject.toml"
