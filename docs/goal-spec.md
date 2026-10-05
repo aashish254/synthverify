@@ -170,7 +170,9 @@ carries the public tier is rejected with `422 policy_restriction` if it asks the
 ### 4.1 Detection quality — trained models, without selling the licence
 
 Today: 11 heuristic detectors registered via `synthverify/detectors/registry.py::register`; no ML
-detector exists; `metadata` detects C2PA/JUMBF *markers* but validates no signature; text has
+detector exists; `metadata` now *cryptographically validates* a C2PA/JUMBF content credential
+(signature + data-hash binding) behind the optional `c2pa` extra, and degrades a manifest it cannot
+check to a distinct `provenance-unverifiable` verdict rather than trusting or accusing it; text has
 stylometry only.
 
 `REQ-DET-1` ML detector plugins MUST be implemented as ordinary `Detector` subclasses, using the
@@ -212,6 +214,17 @@ state, and a distinct verdict: `authentic-provenance` / `provenance-invalid` / `
 `AC-DET-5` Fixtures include a validly signed, a tampered-after-signing, and a strip-metadata manifest;
 the tampered one MUST produce the `provenance-invalid` flag and MUST NOT produce
 `CAMERA_ORIGIN_DECLARED`.
+**Implemented** (`synthverify/provenance/c2pa.py`, wired into `detectors/image_metadata.py`; verdict +
+audit event in `worker.py` / `api/routes_media.py`; minted and graded by `tests/fixtures_c2pa.py` and
+`tests/test_provenance.py`). The verdict set also carries a fourth state,
+`provenance-unverifiable`, for "a credential looks present but this build could not check it"
+(optional verifier absent, unsupported algorithm, unparsable structure) so absence or corruption is
+never read as tampering. Signature validation runs over the RFC 8152 `COSE_Sign1`
+`Sig_structure = ["Signature1", protected, external_aad, payload]` with an ES256 key carried in an
+RFC 9360 `x5chain`, and the tamper case is caught by the claim's SHA-256 `c2pa.hash.data` hard binding
+against the container with the credential removed. Scope is machinery-correctness — the fixtures prove
+the validator accepts a good credential and rejects a broken one, not byte-level interop with a
+third-party C2PA profile (ISO-BMFF box hashing is out of scope).
 
 `REQ-DET-6` Face-region awareness: landmark-consistency and lip-sync (A/V) checks operating on
 detector-shared frame decode.
@@ -639,14 +652,14 @@ No hosted-runner execution (interpretation 6), which applies verbatim to the `li
 
 Landed and verified; commands and every printed count in README §2.5 and [`TODO.md`](../TODO.md) T39.
 
-* **The lock** — `docker/requirements-lock.txt`, **48 pins**, consumed as a *constraints* file
+* **The lock** — `docker/requirements-lock.txt`, **55 pins**, consumed as a *constraints* file
   (`pip install -c …`) by `docker/Dockerfile`, by `docker/Dockerfile.postgres` (whose overlay may add
   `psycopg` and may not move a locked package), by `make setup` and by every CI leg. Constraints rather than
   a requirements list because `pyproject.toml` stays the single statement of *what* is needed, and because an
   entry the requested extra does not pull in is inert - which is what lets one file serve the image
   (`core,vision`), the dev environment and each CI profile without three of them drifting apart.
 * **The check** — `synthverify dependency-lock` (also chained into `synthverify freedom`, so `make freedom`
-  runs it): `52 packages in the declared closure, 54 pinned`, groups `core=11, dev=8, jwt=1, valkey=1, vision=2`,
+  runs it): `53 packages in the declared closure, 55 pinned`, groups `c2pa=2, core=11, dev=9, jwt=1, valkey=1, vision=2`,
   `RESULT: PASS`. It compares the lock with **installed metadata** offline - the same closure walk FC-1 uses -
   and therefore fails in both directions: a closure member with no pin, a pin nothing depends on any more, a
   pin whose version differs from what is installed, and a lock line that is not a `name==version` pin at all.
@@ -666,7 +679,7 @@ Landed and verified; commands and every printed count in README §2.5 and [`TODO
     against a Windows install's own.
 * **The artifact-level proof** (`make lock-e2e`, `scripts/lock_e2e.py`): the last local run was **10/10**, and
   the first hosted run was **9/10** on the same script and a same-source build. Neither figure is taken on the
-  54-pin file this section describes, so the next hosted run certifies them and the two numbers are printed
+  55-pin file this section describes, so the next hosted run certifies them and the two numbers are printed
   side by side rather than smoothed into one. The single check that went red on the runner was a claim about
   the *host*, not about the artifact, which is why it is treated as a gate defect and fixed as one. The
   headline is measured on the build rather than on the file - two `docker build --no-cache` runs from

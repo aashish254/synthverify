@@ -12,8 +12,9 @@ says which.
 
 No *release-blocking* work is queued ahead of `1.0.1`: the requirements through `1.0.0` are done, and
 what remains below is open work, not a gate this version has skipped. That sentence's scope has since
-moved — the thesis tranche has started adding `REQ-DET-3`'s measurement machinery, which is *new*
-requirement work rather than a gate 1.0.0 skipped, and it is the first entry under **Added**. The open
+moved — new `REQ-*` work has landed under **Added** since the tag: `REQ-DET-3`'s measurement machinery
+(the thesis tranche) and `REQ-DET-5` / `AC-DET-5` (C2PA cryptographic provenance validation, the first
+entry below). Both are *new* requirement work rather than a gate 1.0.0 skipped. The open
 items are tracked in [`docs/goal-spec.md`](docs/goal-spec.md) §9 and in `TODO.md`:
 
 - `REQ-IDAM-2` — scope-granted credentials (`jobs:read`, `media:submit`, …) alongside roles, with a
@@ -32,6 +33,29 @@ items are tracked in [`docs/goal-spec.md`](docs/goal-spec.md) §9 and in `TODO.m
 - `OQ-1` … `OQ-6` — open questions that are operator weightings, not code.
 
 ### Added
+
+- **`REQ-DET-5` / `AC-DET-5` — C2PA cryptographic provenance validation on ingest**, behind a new
+  optional `c2pa` extra. Previously `metadata` only scanned for `jumb`/`c2pa` *byte markers*, which any
+  attacker can splice in; it now walks the JUMBF superbox, decodes the CBOR claim, and verifies a real
+  RFC 8152 `COSE_Sign1` (`Sig_structure = ["Signature1", protected, external_aad, payload]`, ES256 key in
+  an RFC 9360 `x5chain`) against the embedded X.509 certificate, then checks the claim's SHA-256
+  `c2pa.hash.data` hard binding over the container with the credential removed (PNG `caBX` chunk, JPEG
+  `COM` segment). Four verdicts — `authentic-provenance` / `provenance-invalid` / `provenance-stripped`
+  / `provenance-unverifiable` — each ride on the report as a first-class `provenance` field, gate the
+  `CAMERA_ORIGIN_DECLARED` authenticity flag off when a credential fails (`AC-DET-5`), and are recorded
+  in the hash-chained audit ledger as a `provenance.validated` event on both the worker and the
+  synchronous `/analyze` path. Absent and unverifiable are kept *apart* from invalid, and no verdict ever
+  raises: a malformed manifest or an air-gapped image without the extra degrades to a clear record.
+  Scope is machinery-correctness (the validator's accept/reject/degrade logic), not byte-level interop
+  with a third-party C2PA profile — ISO-BMFF box hashing is out of scope, stated in both modules.
+  The first new runtime dependency since `REQ-IDAM-1`: `cbor2` (**MIT**, FC-1 clean from installed
+  metadata), with `cryptography` promoted to a declared root. `make licenses` now reads **53 packages
+  from 24 declared roots**, and `make lock-check` **PASS** at **55 pinned** (groups `core=11, dev=9,
+  c2pa=2, jwt=1, valkey=1, vision=2`). `cbor2` is added to `dev` so CI/contributors grade it and the
+  provenance tests run rather than skip; it is deliberately **not** in the shipped image, which serves
+  `provenance-unverifiable` instead of crashing. Graded by `tests/test_provenance.py` (23 cases) with
+  credentials minted by `tests/fixtures_c2pa.py`; two mutations (always-valid binding, always-valid
+  signature) each turn the matching tamper test red, so the suite is load-bearing on both tamper vectors.
 
 - **`synthverify/eval/` — the measurement half of the product.** AUC (Mann-Whitney, ties at half credit
   so a constant detector scores *exactly* chance), DeLong's interval computed in O(n log n) with

@@ -88,12 +88,14 @@ class TestTheProjectMetadataIsStructurallySound:
             assert all(naming(spec) for spec in specs), f"{group} has a requirement line with no name"
 
     def test_the_declared_root_count_matches_what_the_gates_print(self) -> None:
-        """`make licenses` reports "52 packages from 22 declared roots", and README quotes the 22.
+        """`make licenses` reports "53 packages from 24 declared roots", and README quotes the 24.
 
         T49 (REQ-IDAM-1 / AC-IDAM-1) adds `PyJWT` as a new declared root (via the `jwt` extra and
         the `dev` extra, so the OIDC tests run offline in CI); `make typecheck` needs `types-PyYAML`
-        for the alert-rules scanner to type-check. The full 22-root closure adds `PyJWT` +
-        `cryptography` + `cffi` + `pycparser` + `types-PyYAML` to the 47 the pre-T49 scan showed.
+        for the alert-rules scanner to type-check. REQ-DET-5 then adds the `c2pa` extra, which names
+        `cbor2` for the first time and promotes `cryptography` to a declared root (before it was only
+        a transitive pull through `PyJWT[crypto]`, so the closure walk never counted it as one). The
+        full 24-root closure is 22 + `cbor2` + `cryptography`.
         """
         naming = _doctor().requirement_name
         groups = {
@@ -102,7 +104,7 @@ class TestTheProjectMetadataIsStructurallySound:
             "build-system": PYPROJECT["build-system"]["requires"],
         }
         declared = {naming(spec).lower().replace("_", "-") for specs in groups.values() for spec in specs}
-        assert len(declared) == 22, (
+        assert len(declared) == 24, (
             "the declared-root count is quoted in README.md, docs/goal-spec.md and `make licenses`; "
             "change it here only with those sentences"
         )

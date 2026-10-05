@@ -271,6 +271,26 @@ def process_job(db, job_id: str, claim: JobClaim | None = None) -> None:
                     "duration_ms": duration_ms,
                 },
             )
+            # REQ-DET-5 / AC-DET-5: the provenance verdict is recorded in the hash-chained ledger,
+            # not only in the job result, so "was this asset's content credential valid at the time
+            # we checked it" is tamper-evident history. Every verdict is appended - valid, invalid
+            # and absent alike - because the *absence* of a check is exactly what a later reviewer
+            # must be able to distinguish from a check that failed. Audio/video/text runs no
+            # provenance detector, so ``report.provenance`` is None there and no event is written.
+            provenance = outcome.report.provenance
+            if provenance is not None:
+                AuditLedger(session).append(
+                    actor=f"job:{job_id}",
+                    action="provenance.validated",
+                    resource=f"media:{media.sha256[:16]}",
+                    detail={
+                        "verdict": provenance["verdict"],
+                        "checked": provenance["checked"],
+                        "manifest_present": provenance["manifest_present"],
+                        "issuer": provenance["issuer"],
+                        "reason": provenance["reason"],
+                    },
+                )
             enqueue_deliveries(session, job)
             session.commit()
 

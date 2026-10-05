@@ -84,6 +84,15 @@ valkey = ["valkey>=6.0,<7"]
 # the air-gap FC-4 leg keeps its 20-root closure. Operators turn it on with `pip install
 # "synthverify[jwt]"` and set SV_OIDC_ENABLED=true.
 jwt = ["PyJWT[crypto]>=2.8,<3"]
+# REQ-DET-5: cryptographic C2PA provenance validation (not marker detection). `cryptography`
+# (Apache-2.0 OR BSD-3-Clause) verifies the COSE signature and reads the issuer X.509; `cbor2`
+# (Apache-2.0) decodes the claim and COSE structures, which are CBOR. Both are on the FC-1
+# allowlist and neither pulls a new transitive root. Kept as an extra so the default install and
+# the air-gap image ship zero new runtime code - with it absent the pipeline degrades to a clear
+# "unverified" audit record instead of crashing. Operators turn it on with `pip install
+# "synthverify[c2pa]"`. `cryptography` is already in the closure via the `jwt` extra; this extra
+# restates it so `[c2pa]` is self-sufficient without `[jwt]`.
+c2pa = ["cryptography>=42", "cbor2>=5.4"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -101,6 +110,13 @@ dev = [
     # synthverify` (no extras) never pulls either one and the air-gap FC-4 closure stays at
     # its 20-root figure.
     "PyJWT[crypto]>=2.8,<3",
+    # REQ-DET-5 has to run under CI too, so the C2PA verifier is in the contributor / CI
+    # environment: `cbor2` (Apache-2.0) plus the `cryptography` already pulled by the line above.
+    # Declaring it here (not only in the `c2pa` extra) is what lets `make lock-check` and the FC-1
+    # gate read cbor2's *installed* metadata - an uninstalled extra is a finding, not a pass - and
+    # lets tests/test_provenance.py run instead of skip. The shipped image does not install the
+    # `c2pa` extra, so the core runtime closure is unaffected.
+    "cbor2>=5.4",
     # FC-1 covers build-time dependencies ("Every runtime and build-time dependency", goal-spec §4),
     # and it grades offline, from installed metadata. A PEP 517 isolated build never leaves
     # `setuptools`/`wheel` in the *target* environment, so declaring them here is what makes the

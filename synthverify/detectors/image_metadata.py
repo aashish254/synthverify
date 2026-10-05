@@ -16,6 +16,29 @@ from PIL import Image
 
 from synthverify.detectors.base import DetectionContext, Detector, DetectorResult, clamp01
 from synthverify.detectors.registry import register
+from synthverify.provenance import ProvenanceVerdict, validate_container
+
+# One plain-language finding per provenance verdict, ``{reason}`` filled from the validator.
+# Worded so absence ("stripped") and "could not check" ("unverifiable") never read as an
+# accusation of tampering - only ``provenance-invalid`` does.
+_PROVENANCE_FINDINGS: dict[ProvenanceVerdict, str] = {
+    ProvenanceVerdict.AUTHENTIC: (
+        "C2PA content credential validates: the COSE signature verifies against its "
+        "certificate and the asset matches the claim's data-hash binding. {reason}"
+    ),
+    ProvenanceVerdict.INVALID: (
+        "C2PA content credential FAILED validation - a manifest is present but its "
+        "signature or data-hash binding does not hold. {reason}"
+    ),
+    ProvenanceVerdict.STRIPPED: (
+        "No C2PA content credential found in the container. Absence is expected for most "
+        "camera and platform output, so it is not evidence of tampering. {reason}"
+    ),
+    ProvenanceVerdict.UNVERIFIABLE: (
+        "A C2PA credential appears present but this build could not verify it. Reported "
+        "apart from a failed check so an unreadable file is never read as a tampered one. {reason}"
+    ),
+}
 
 # Tools whose metadata signature indicates synthetic generation (strong signal)
 AI_TOOL_SIGNATURES = [
@@ -127,12 +150,21 @@ class ImageMetadataDetector(Detector):
 
         c2pa_ev = self._c2pa(ctx, findings, flags)
         evidence.update(c2pa_ev)
-        if c2pa_ev.get("c2pa_present"):
-            score = min(score, 0.10)  # verifiable provenance dominates heuristics
-            findings.append(
-                "C2PA content-credential manifest detected - the file carries signed "
-                "provenance claims; downstream systems should validate the signature."
-            )
+        verdict = ProvenanceVerdict(c2pa_ev["provenance"]["verdict"])
+        if verdict is ProvenanceVerdict.AUTHENTIC:
+            # A credential that actually verifies outranks every metadata heuristic.
+            score = min(score, 0.05)
+            confidence = max(confidence, 0.85)
+        elif verdict is ProvenanceVerdict.INVALID:
+            # AC-DET-5: a broken credential is the loudest tamper signal, and it cancels the
+            # forgeable camera-origin authenticity flags that a valid one would corroborate.
+            score = max(score, 0.85)
+            confidence = max(confidence, 0.8)
+            for forgeable in ("CAMERA_ORIGIN_DECLARED", "PARTIAL_CAMERA_INFO"):
+                if forgeable in flags:
+                    flags.remove(forgeable)
+        # STRIPPED and UNVERIFIABLE deliberately leave score and flags untouched: one is weak
+        # evidence of nothing, the other is the honest record that no check was performed.
 
         return DetectorResult(
             detector=self.name,
@@ -275,19 +307,23 @@ class ImageMetadataDetector(Detector):
 
     @staticmethod
     def _c2pa(ctx: DetectionContext, findings: list[str], flags: list[str]) -> dict:
-        """Scan the raw container for C2PA (JUMBF) content-credential markers."""
-        markers = {
-            "jumb_box": b"jumb",
-            "c2pa_marker": b"c2pa",
-            "c2pa_urn": b"urn:c2pa",
-            "claim_generator": b"claim_generator",
+        """Cryptographically validate any C2PA content credential in the container (REQ-DET-5).
+
+        This replaces the old substring scan. Finding the bytes of a manifest is trivial and
+        worthless - anyone can splice ``jumb`` into a file; proving the credential's signature
+        and data-hash binding hold is the actual forensic claim. ``validate_container`` never
+        raises, so a malformed manifest degrades to a verdict rather than failing the job.
+        """
+        result = validate_container(ctx.data)
+        evidence: dict[str, Any] = {
+            "provenance": result.to_dict(),
+            "c2pa_present": result.manifest_present,
         }
-        found = {k: ctx.data.find(v) != -1 for k, v in markers.items()}
-        present = any(found.values())
-        evidence: dict[str, Any] = {"c2pa_present": present}
-        if present:
-            evidence["c2pa_markers"] = {k: v for k, v in found.items() if v}
+        flags.append(result.flag)  # PROVENANCE_AUTHENTIC / INVALID / STRIPPED / UNVERIFIABLE
+        if result.manifest_present:
+            # Back-compat marker: the console and the eval harness grep for this exact string.
             flags.append("C2PA_PROVENANCE_PRESENT")
+        findings.append(_PROVENANCE_FINDINGS[result.verdict].format(reason=result.reason))
         return evidence
 
 

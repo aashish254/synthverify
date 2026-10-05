@@ -37,6 +37,10 @@ FLAGS_GLOSSARY: dict[str, str] = {
     "PARTIAL_CAMERA_INFO": "Partial camera info present.",
     "TIMESTAMP_MISMATCH": "Capture and modification timestamps diverge - file re-saved after capture.",
     "C2PA_PROVENANCE_PRESENT": "C2PA content-credential manifest present - signed provenance claims attached.",
+    "PROVENANCE_AUTHENTIC": "Content-credential signature verifies and the asset matches its data-hash binding - provenance is cryptographically intact.",
+    "PROVENANCE_INVALID": "A content credential is present but does not hold: bad signature, expired certificate, or the asset changed after signing.",
+    "PROVENANCE_STRIPPED": "No content credential in the container. Weak signal - platforms strip provenance on re-encode as often as bad actors do.",
+    "PROVENANCE_UNVERIFIABLE": "A credential looks present but this build could not check it (verifier not installed, or the manifest does not parse). Absence of a check is not proof of tampering.",
     "DOUBLE_COMPRESSION": "Multiple JPEG compression histories - the file was re-saved repeatedly.",
     "HEAVY_RECOMPRESS": "Low-quality re-encode; original forensic detail may be lost.",
     "SPECTRAL_SPIKES": "Periodic Fourier-domain peaks characteristic of upsampling networks.",
@@ -81,7 +85,27 @@ REVIEW_FORCE_FLAGS = {
     "PHOTOMETRIC_FLICKER",
     "DUPLICATE_FRAMES",
     "FRAME_EL_INCONSISTENT",
+    # A content credential that is present but does not hold is the strongest single tamper
+    # signal the pipeline can produce: someone signed this asset and then changed it. It
+    # forces review on its own; AUTHENTIC/STRIPPED/UNVERIFIABLE deliberately do not.
+    "PROVENANCE_INVALID",
 }
+
+# Flags that report provenance *state* rather than a forensic anomaly. The routing heuristics
+# count how many independent alarms fired; a credential that is merely absent (``STRIPPED``),
+# merely present-and-intact (``AUTHENTIC``), or present-but-uncheckable (``UNVERIFIABLE``) -
+# and the back-compat ``C2PA_PROVENANCE_PRESENT`` marker - are not alarms. Counting them would
+# flip every credential-less photo (i.e. almost every real photo) to human review, which is
+# exactly the accusation-by-absence this feature is built to avoid. Only ``PROVENANCE_INVALID``
+# is a real alarm, and it is handled above.
+PROVENANCE_STATE_FLAGS = frozenset(
+    {
+        "PROVENANCE_AUTHENTIC",
+        "PROVENANCE_STRIPPED",
+        "PROVENANCE_UNVERIFIABLE",
+        "C2PA_PROVENANCE_PRESENT",
+    }
+)
 
 
 @dataclass
@@ -134,6 +158,10 @@ class VerificationReport:
     policy: dict[str, float]
     policy_name: str = "defaults"
     artifacts: list[dict[str, str]] = field(default_factory=list)
+    #: The C2PA cryptographic-provenance verdict for this asset (REQ-DET-5), lifted from the
+    #: metadata detector's evidence. None when the pipeline ran no provenance check (e.g. a
+    #: media type we do not parse); the shape is ``ProvenanceResult.to_dict()`` when present.
+    provenance: dict[str, Any] | None = None
     schema_version: str = REPORT_SCHEMA
     generated_at: str = field(
         default_factory=lambda: datetime.now(UTC).isoformat()
@@ -160,6 +188,7 @@ class VerificationReport:
             "policy": self.policy,
             "policy_name": self.policy_name,
             "artifacts": self.artifacts,
+            "provenance": self.provenance,
             "generated_at": self.generated_at,
         }
 
@@ -207,6 +236,14 @@ def aggregate(
     flags = _unique(flag for r in ran for flag in r.flags)
     flag_explanations = {f: FLAGS_GLOSSARY.get(f, "Forensic anomaly flag.") for f in flags}
 
+    # The metadata detector runs the C2PA cryptographic check and stashes the full verdict in
+    # its structured evidence; lift it onto the report so the API, the audit trail, and the
+    # console all read provenance from one first-class place rather than digging per-detector.
+    provenance = next(
+        (r.evidence["provenance"] for r in ran if isinstance(r.evidence.get("provenance"), dict)),
+        None,
+    )
+
     # ------------------------------------------------------------- routing
     conclusive = coverage >= policy.min_coverage and confidence >= policy.low_confidence and bool(ran)
     action, rationale = _route(
@@ -241,6 +278,7 @@ def aggregate(
         policy=policy.to_dict(),
         policy_name=policy_name or policy.name,
         artifacts=artifacts or [],
+        provenance=provenance,
     )
 
 
@@ -278,6 +316,9 @@ def _route(
             "Detector coverage or confidence is too low for an automated decision; "
             "the report is provided as evidence only.",
         )
+    # Count only anomaly flags: provenance-state markers must not inflate the "how many
+    # independent alarms fired" heuristic (see PROVENANCE_STATE_FLAGS).
+    alarms = [f for f in flags if f not in PROVENANCE_STATE_FLAGS]
     if declared or fused >= policy.block_score:
         if declared:
             return (
@@ -286,19 +327,19 @@ def _route(
                 "(e.g. generation tool signature); policy blocks automatically.",
             )
         return ("BLOCK", f"Fused risk {fused:.2f} meets or exceeds the block threshold {policy.block_score:.2f}.")
-    if fused >= policy.escalate_score or len(flags) >= 3:
+    if fused >= policy.escalate_score or len(alarms) >= 3:
         return (
             "ESCALATE",
             f"Fused risk {fused:.2f} is above the escalation threshold "
             f"{policy.escalate_score:.2f}, or three-plus independent forensic flags fired.",
         )
-    if fused >= policy.review_score or len(flags) >= 2 or any(f in REVIEW_FORCE_FLAGS for f in flags):
+    if fused >= policy.review_score or len(alarms) >= 2 or any(f in REVIEW_FORCE_FLAGS for f in flags):
         drivers = [f for f in flags if f in REVIEW_FORCE_FLAGS]
         why = f"fused risk {fused:.2f} >= review threshold {policy.review_score:.2f}"
         if drivers:
             why += f"; driving flags: {', '.join(drivers[:3])}"
-        elif flags:
-            why += f"; {len(flags)} forensic flag(s) present"
+        elif alarms:
+            why += f"; {len(alarms)} forensic flag(s) present"
         return ("MANUAL_REVIEW", "Route to a human reviewer: " + why + ".")
     return (
         "PROCEED",

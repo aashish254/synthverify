@@ -24,7 +24,7 @@ done)
 # environment again. `--system-site-packages` is deliberately absent: it lets a Homebrew-installed
 # `scipy` satisfy a pin the lock never described, so the env passes locally and the same command
 # fails on a clean machine.
-ALL_EXTRAS := vision,valkey,jwt,dev
+ALL_EXTRAS := vision,valkey,jwt,c2pa,dev
 
 setup:            ## create a self-contained venv and install the locked closure, every extra
 	@if [ -z "$(PYTHON)" ]; then \

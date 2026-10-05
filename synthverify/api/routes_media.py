@@ -272,6 +272,23 @@ def analyze_sync(
             resource=f"media:{outcome.sha256[:16]}",
             detail={"risk_score": outcome.report.risk_score, "action": outcome.report.recommended_action},
         )
+        # Mirror the worker's REQ-DET-5 ledger entry on the synchronous path too, so a provenance
+        # verdict is tamper-evident history no matter which endpoint produced it. Guarded for the
+        # same reason: audio/video/text runs no provenance detector, so ``provenance`` is None.
+        provenance = outcome.report.provenance
+        if provenance is not None:
+            AuditLedger(session).append(
+                actor=api_key.key_id,
+                action="provenance.validated",
+                resource=f"media:{outcome.sha256[:16]}",
+                detail={
+                    "verdict": provenance["verdict"],
+                    "checked": provenance["checked"],
+                    "manifest_present": provenance["manifest_present"],
+                    "issuer": provenance["issuer"],
+                    "reason": provenance["reason"],
+                },
+            )
         session.commit()
     finally:
         session.close()
