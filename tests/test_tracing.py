@@ -18,6 +18,7 @@ Two classes exist to prove a gate could have failed:
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import hashlib
 import json
@@ -25,6 +26,7 @@ import logging
 import re
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -920,6 +922,21 @@ class TestWorkerLogLineCarriesTheTrace:
                 headers={"traceparent": build_traceparent(TRACE, SPAN)},
             )
             await wait_for_job(client, response.json()["job_id"])
+            # `wait_for_job` observes the DB commit at worker.py:275; the completion line is
+            # printed at worker.py:290, after the webhook-delivery work that runs between them.
+            # The record is therefore eventual relative to the row the poller returns on, so
+            # wait for the line itself - inside the capture window, because `at_level` restores
+            # the logger's level on exit and a late INFO record would never reach caplog.
+            def _carries_completion() -> bool:
+                return any(
+                    f"trace_id={TRACE}" in record.getMessage() and "completed" in record.getMessage()
+                    for record in caplog.records
+                )
+
+            deadline = time.monotonic() + 20.0
+            while time.monotonic() < deadline and not _carries_completion():
+                await asyncio.sleep(0.05)
+            assert _carries_completion(), [record.getMessage() for record in caplog.records]
         messages = [record.getMessage() for record in caplog.records]
         assert any(f"trace_id={TRACE}" in m and "completed" in m for m in messages), messages
 
