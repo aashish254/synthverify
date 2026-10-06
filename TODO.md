@@ -2187,7 +2187,8 @@ or which classifier is finally chosen.
     **1026 → 1005 passed, 21 skipped in 165.2 s**).
   - **What is honestly not re-measured on this machine.** The Postgres suite leg and the two container
     legs (`make lock-e2e`, `make airgap`) are marked **RE-MEASURE PENDING** in README §2.5 — both services
-    are down and the thermal budget says a doc pass is not worth spinning them up. The OIDC code path is
+    are down and the thermal budget says a doc pass is not worth spinning them up. *(Since closed: hosted
+    run #3 re-ran the Postgres leg and the linux lock gate on GitHub's runners — see T62 below and README §2.5.)* The OIDC code path is
     exercised by 23 in-process tests on SQLite; the FC-4 air-gap claim in particular is *unchanged in
     reasoning* (`oidc_enabled` short-circuits before any socket) but the sealed-container proof itself was
     not re-run this pass.
@@ -2273,7 +2274,7 @@ or which classifier is finally chosen.
   - **What T61 does not close:** it never *ran* the seven legs it fixes. The Docker daemon is down on this
     box for thermal-budget reasons and there is no Windows interpreter here, so all seven re-appearances are
     **T62**, and the Windows *suite* remains unexecuted at any size.
-- [ ] **T62** **Re-run the seven legs that T61 fixed, and let the numbers that come back overwrite the
+- [x] **T62** **Re-run the seven legs that T61 fixed, and let the numbers that come back overwrite the
     `RE-MEASURE PENDING` rows.** `make airgap`, `make docker`, `make scale`, `make scale-mutations`,
     `make ledger-postgres`, `make reproducible-image`/`make lock-e2e`, plus the Postgres+Valkey full-suite leg
     and the two container portability legs at 1026 tests. Order matters for the thermal budget: the two
@@ -2281,6 +2282,17 @@ or which classifier is finally chosen.
     `--no-cache` builds, and the Postgres leg wants the services up *after* the container legs have released
     their ports. Where a leg is re-run, its row in README §2.5 carries the new print; where it is not, the
     label stays rather than inheriting a number from a tree that no longer exists.
+    **Closed by hosted run #3** (`gh run view 37357793993`, head `1ec212d`, **19 green / 0 red**) rather than
+    by the laptop (its daemon stays down for the thermal budget). GitHub's runners re-ran and certified — over
+    the 1056 tree, not 1026 — `docker`, `scale` + its two `--expect-fail` mutations, `ledger`, the `migrations`
+    job's `scripts/postgres_e2e.py` (16 checks), `reproducible-image`/`lock-e2e` (unmutated `RESULT: PASS` +
+    all four lock mutations caught), and the **Postgres+Valkey full-suite leg** (`test (3.11, postgres)`: dots
+    to `[100%]`, 0 skips, `fixture databases left behind: 0`), plus interpreter portability to 3.12/3.13 across
+    all six `portability` legs. The §2.5 rows for each now carry run #3's printed figures. **Two of T62's items
+    are honestly NOT witnessed by this run, so their labels stay:** `make airgap` (the sealed `--network none`
+    container proof is not a CI job — no hosted leg runs it), and the `linux/aarch64` *container* portability
+    pair (GitHub runners are amd64; the laptop's port images are not rebuilt). README §2.5 keeps both labelled
+    previous rather than inherited from a tree that no longer exists.
 
 
 

@@ -157,26 +157,50 @@ def blackhole():
 
 
 def run_probes(env: dict[str, str], count: int = 2) -> list[dict]:
-    """`count` OS processes, started together, each reporting its own budget outcome."""
-    procs = [
-        subprocess.Popen(
-            [sys.executable, str(PROBE)],
-            cwd=REPO, env={**os.environ, **env}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
-        )
-        for _ in range(count)
-    ]
-    out: list[dict] = []
-    for proc in procs:
-        stdout, stderr = proc.communicate(timeout=120)
-        try:
-            record = json.loads(stdout.strip().splitlines()[-1])
-        except (ValueError, IndexError):
-            record = {"error": f"no report from the probe (exit {proc.returncode})", "stdout": stdout[:200]}
-        record["exit"] = proc.returncode
-        if stderr.strip():
-            record["stderr"] = stderr.strip().splitlines()[-1][:200]
-        out.append(record)
-    return out
+    """`count` OS processes, released together so both engage the bucket concurrently.
+
+    The children used to be started and simply raced each other: a probe whose interpreter finished
+    importing after a sibling had already drained the shared bucket reported 0 admitted, and
+    AC-INFRA-3's "both processes participated" check then failed on the scheduling rather than on the
+    limiter. Each child now raises a ready flag as soon as it is initialised and blocks there; this
+    function opens the gate only once every child has arrived (or one has died, bounded so a broken
+    probe still surfaces through `communicate` below). Only *when* the processes start changes - the
+    limiter, the subject, the attempts and every assertion are untouched.
+    """
+    with tempfile.TemporaryDirectory(prefix="sv-rl-barrier-") as bar:
+        bdir = Path(bar)
+        go = bdir / "go"
+        ready_files = [bdir / f"ready-{i}" for i in range(count)]
+        procs = [
+            subprocess.Popen(
+                [sys.executable, str(PROBE)],
+                cwd=REPO,
+                env={**os.environ, **env,
+                     "SV_RL_READY_FILE": str(ready_files[i]), "SV_RL_GO_FILE": str(go)},
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
+            )
+            for i in range(count)
+        ]
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            if all(r.is_file() for r in ready_files):
+                break
+            if any(p.poll() is not None for p in procs):
+                break  # a child already exited (crash/error) - stop waiting, report it below
+            time.sleep(0.01)
+        go.touch()  # open the gate; a stalled/absent child then simply runs without the rendezvous
+        out: list[dict] = []
+        for proc in procs:
+            stdout, stderr = proc.communicate(timeout=120)
+            try:
+                record = json.loads(stdout.strip().splitlines()[-1])
+            except (ValueError, IndexError):
+                record = {"error": f"no report from the probe (exit {proc.returncode})", "stdout": stdout[:200]}
+            record["exit"] = proc.returncode
+            if stderr.strip():
+                record["stderr"] = stderr.strip().splitlines()[-1][:200]
+            out.append(record)
+        return out
 
 
 def base_env(args: argparse.Namespace, server: Server, backend: str, subject: str, **over) -> dict[str, str]:

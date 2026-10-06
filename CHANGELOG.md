@@ -307,6 +307,24 @@ items are tracked in [`docs/goal-spec.md`](docs/goal-spec.md) §9 and in `TODO.m
 
 ### Changed
 
+- **The `AC-INFRA-3` rate-limit gate now rendezvous its two probe processes before timing them**
+  (`scripts/ratelimit_e2e.py`, `scripts/ratelimit_probe.py`, graded by `make ratelimit` and the CI `limiter`
+  job). The children were started and left to race each other; on a loaded runner a probe whose interpreter
+  finished importing after its sibling had already drained the shared bucket reported `0 admitted`, and the
+  "both processes participated and both were refused" check failed on the *scheduling* rather than on the
+  limiter — the flake the hosted `limiter` job had been tripping. Each child now raises a ready flag and blocks
+  on it; the parent opens a go-file gate only once every child has arrived (bounded, so a crashed probe still
+  surfaces through `communicate`), and the standalone-probe path is a no-op when the env vars are absent. Only
+  *when* the processes start changed: the limiter, subject, attempts and every assertion are untouched, so the
+  `isolated`/`nofallback`/`no-timeout` mutations are still caught. A fresh local run of the barrier-fixed harness
+  prints the balanced `[(20, 60), (20, 60)]` participation at `21 checks passed, 0 failed`.
+- **§2.5 of `README.md` no longer carries `RE-MEASURE PENDING` rows, because hosted run #3 cleared them**
+  (`gh run view 37357793993`, head `1ec212d`, **19 jobs green / 0 red**). The Postgres/Valkey full-suite leg,
+  `scripts/postgres_e2e.py` (16 checks), the macOS/Windows interpreter-portability matrix and the linux
+  lock/reproducible-image gate are flipped from the tagged `753`-size to that run's printed figures; the Windows
+  legs are now recorded as *passing* (`1056 tests, 0 failures, 0 errors, 23 skipped`) rather than only reaching
+  `pytest`. The single row still labelled previous is the `linux/aarch64` container pair (no hosted runner is
+  arm64, and this box's Docker is down for thermal-budget reasons), so it stays honest rather than borrowed.
 - **The operator console was redesigned** (`synthverify/dashboard/index.html`). It now reads as a
   forensic case file rather than a generic admin page: a sticky rail whose tabs carry live per-tab
   indicators, one rotated double-ruled verdict seal as the loud element, numbered exhibits (`E1`…`En`
@@ -454,6 +472,12 @@ next meet — Windows did reach `Run test suite`, and the sentence this section 
 skips on `sys_platform`, so the ≤21-skip ceiling should hold there" turned out to be the *second* thing that
 needed measuring: two POSIX mode-bit cases have no referent on NTFS, and the ceiling is now 21 + 2 named
 skips rather than an untested 21. See the T63 entry.
+**Corrected by run #3 (`gh run view 37357793993`, head `1ec212d`):** that run came back **19 jobs green, 0 red**,
+so the seven jobs this section projected forward to a hosted witness for are witnessed, the three Windows legs
+now *pass* (each `1056 tests, 0 failures, 0 errors, 23 skipped`) rather than merely reaching `pytest`, and the
+labelled §2.5 rows it kept pending — the Postgres/Valkey full leg, `postgres_e2e.py`, the interpreter-portability
+matrix and the linux lock/reproducible-image gate — are flipped to that run's printed figures. The one §2.5 row
+still labelled previous is the `linux/aarch64` container pair, because no hosted runner is arm64.
 
 ## [1.0.0] — 2026-09-27
 

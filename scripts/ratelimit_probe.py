@@ -32,6 +32,28 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 
+def _rendezvous_with_siblings() -> None:
+    """Signal the parent this process is initialised, then wait until it releases every sibling.
+
+    AC-INFRA-3's concurrency check needs both probes to be spending the shared bucket at the same
+    time. Interpreter start-up varies by a few hundred ms on a loaded runner, so a child that begins
+    after its sibling has already drained the bucket reports 0 admitted and the check fails on the
+    race rather than on the product. The parent's `run_probes` sets the two env vars, raises the gate
+    once both children have arrived, and this function is the child half. It is a no-op when the vars
+    are absent, so a standalone run of this probe behaves exactly as before.
+    """
+    ready = os.environ.get("SV_RL_READY_FILE")
+    go = os.environ.get("SV_RL_GO_FILE")
+    if not ready or not go:
+        return
+    Path(ready).write_text(str(os.getpid()), encoding="utf-8")
+    deadline = time.monotonic() + 30
+    while not Path(go).exists():
+        if time.monotonic() > deadline:
+            break
+        time.sleep(0.01)
+
+
 def main() -> int:
     from synthverify.config import get_settings
     from synthverify.ratelimits import build_rate_limiter
@@ -55,6 +77,7 @@ def main() -> int:
         "degraded": limiter.degraded,
         "error": None,
     }
+    _rendezvous_with_siblings()
     started = time.monotonic()
     try:
         for _ in range(attempts):
