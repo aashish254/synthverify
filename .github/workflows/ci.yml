@@ -227,7 +227,7 @@ jobs:
         run: synthverify freedom --json > freedom-report.json
       - name: FC-4 - offline proof (outbound sockets blocked at the syscall boundary)
         run: pytest tests/test_offline.py -m offline -q --tb=short
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: freedom-report
