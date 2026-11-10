@@ -85,7 +85,9 @@ class ElaDetector(Detector):
             )
         if p99 > 60:
             flags.append("ELA_HOTSPOTS")
-            findings.append(f"99th-pixel error level reaches {p99:.0f}/255 - sharp recompression boundaries present.")
+            findings.append(
+                f"99th-pixel error level reaches {p99:.0f}/255 - sharp recompression boundaries present."
+            )
 
         png = self._heatmap(ela_map)
         return DetectorResult(

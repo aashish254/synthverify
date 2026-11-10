@@ -53,9 +53,13 @@ class EmbeddedBroker(JobBroker):
     def recover(self) -> int:
         """Re-enqueue jobs orphaned by a crash (`queued`/`running` rows, no live consumer)."""
         with self.db.session() as session:
-            stale = session.execute(
-                select(Job).where(Job.status.in_([JobStatus.QUEUED.value, JobStatus.RUNNING.value]))
-            ).scalars().all()
+            stale = (
+                session.execute(
+                    select(Job).where(Job.status.in_([JobStatus.QUEUED.value, JobStatus.RUNNING.value]))
+                )
+                .scalars()
+                .all()
+            )
             for job in stale:
                 self.enqueue(job.id, job.priority)
             if stale:

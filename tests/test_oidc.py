@@ -202,7 +202,7 @@ def test_alg_confusion_is_refused(keypair, oidc_settings, jwks_stub):
     claims = _b64(
         (
             '{"iss":"' + ISSUER + '","aud":"' + AUDIENCE + '","sub":"attacker",'
-            '"iat":' + str(int(time.time())) + ',"exp":' + str(int(time.time()) + 300) + ','
+            '"iat":' + str(int(time.time())) + ',"exp":' + str(int(time.time()) + 300) + ","
             '"sv_role":"admin","sv_org":"anyone"}'
         ).encode()
     )
@@ -261,9 +261,7 @@ def test_oidc_disabled_short_circuits_before_the_network(monkeypatch: pytest.Mon
         (["viewer", "admin"], "admin"),
     ],
 )
-def test_role_mapping_onto_the_existing_three_roles(
-    keypair, oidc_settings, jwks_stub, role_claim, expected
-):
+def test_role_mapping_onto_the_existing_three_roles(keypair, oidc_settings, jwks_stub, role_claim, expected):
     """Spec REQ-IDAM-1: "Roles map onto the existing admin/analyst/service model rather than
     inventing a parallel one." The mapper takes the highest-privilege recognised entry."""
     token = _sign(keypair, role=role_claim)
@@ -296,9 +294,7 @@ def test_scopes_claim_flows_into_require_scope_shape(keypair, oidc_settings, jwk
     assert parse_scopes("jobs:read,media:submit") == granted
 
 
-def test_missing_scopes_claim_falls_through_to_role_equivalent(
-    keypair, oidc_settings, jwks_stub
-):
+def test_missing_scopes_claim_falls_through_to_role_equivalent(keypair, oidc_settings, jwks_stub):
     """T48's backward-compat rule is the same for a JWT: an unset `scopes` means the
     role grant, so a bearer analyst keeps the analyst role-scopes union."""
     token = _sign(keypair)

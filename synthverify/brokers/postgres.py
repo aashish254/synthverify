@@ -133,13 +133,17 @@ class PostgresBroker(JobBroker):
     def recover(self) -> int:
         """Return expired leases to `queued`, clearing the fence so the next claimer owns the write."""
         with self.db.session() as session:
-            expired = session.execute(
-                select(Job.id).where(
-                    Job.status == JobStatus.RUNNING.value,
-                    Job.lease_expires_at.is_not(None),
-                    Job.lease_expires_at < utcnow(),
+            expired = (
+                session.execute(
+                    select(Job.id).where(
+                        Job.status == JobStatus.RUNNING.value,
+                        Job.lease_expires_at.is_not(None),
+                        Job.lease_expires_at < utcnow(),
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             if not expired:
                 return 0
             session.execute(

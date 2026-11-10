@@ -83,13 +83,15 @@ def declared_groups() -> dict[str, list[str]]:
 
 
 def check_interpreter(report: Report) -> None:
-    requires = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["requires-python"]
+    requires = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "requires-python"
+    ]
     match = re.search(r"(\d+)\.(\d+)", requires)
     floor = tuple(int(part) for part in match.groups()) if match else (3, 10)
     if sys.version_info < floor:
         report.fail(
             "python version",
-            f"running {sys.version.split()[0]}, `requires-python = \"{requires}\"`. "
+            f'running {sys.version.split()[0]}, `requires-python = "{requires}"`. '
             "Re-run with one that fits: `make setup PYTHON=/path/to/python3.11`",
         )
         return
@@ -184,7 +186,14 @@ def check_lock(report: Report) -> None:
         check=False,
         timeout=120,
     )
-    first_problem = next((line for line in (proc.stdout + proc.stderr).splitlines() if "FAIL" in line or "fail" in line.lower()), "")
+    first_problem = next(
+        (
+            line
+            for line in (proc.stdout + proc.stderr).splitlines()
+            if "FAIL" in line or "fail" in line.lower()
+        ),
+        "",
+    )
     if proc.returncode == 0:
         locked = len(LOCK.read_text(encoding="utf-8").splitlines())
         report.ok("dependency lock", f"{locked} lines, matches pyproject.toml")
@@ -220,7 +229,10 @@ def check_advisories(report: Report) -> None:
     if os.environ.get("SV_TEST_VALKEY"):
         report.ok("SV_TEST_VALKEY", "set: the shared-bucket tests run instead of skipping")
     else:
-        report.warn("SV_TEST_VALKEY", "unset: 5 Valkey-gated tests skip. `make valkey-up` and set it to 127.0.0.1:6379")
+        report.warn(
+            "SV_TEST_VALKEY",
+            "unset: 5 Valkey-gated tests skip. `make valkey-up` and set it to 127.0.0.1:6379",
+        )
 
     report.ok("media + database paths", str(ROOT / "data") + " (created on first run; git-ignored)")
 

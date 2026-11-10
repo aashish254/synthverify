@@ -236,7 +236,9 @@ def _r(value: float, digits: int = 6) -> float:
     return round(float(value), digits)
 
 
-def _as_pairs(scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _as_pairs(
+    scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     """Validate and coerce inputs, failing loudly on the cases a metric cannot answer."""
     s = np.asarray(scores, dtype=np.float64).ravel()
     y = np.asarray(labels, dtype=np.int64).ravel()
@@ -297,7 +299,9 @@ def _delong_placement(pos: np.ndarray, neg: np.ndarray) -> tuple[np.ndarray, np.
     return v10, v01, float(v10.mean())
 
 
-def delong_auc(scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray, level: float = 0.95) -> tuple[float, Interval]:
+def delong_auc(
+    scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray, level: float = 0.95
+) -> tuple[float, Interval]:
     """The AUC by DeLong's placement estimator, with its closed-form interval on the logit scale.
 
     Returns `(estimate, interval)`. The estimate is exposed as well as the interval because of a
@@ -334,7 +338,9 @@ def delong_auc(scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.
     return estimate, Interval(low=low, high=high, level=level, method="delong-logit")
 
 
-def auc_delong_ci(scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray, level: float = 0.95) -> Interval:
+def auc_delong_ci(
+    scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray, level: float = 0.95
+) -> Interval:
     """The DeLong interval alone, for callers that already have the AUC from `auc()`."""
     return delong_auc(scores, labels, level=level)[1]
 
@@ -419,7 +425,9 @@ def eer(scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray
     return best.fpr, best.threshold
 
 
-def confusion_at(scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray, threshold: float) -> Confusion:
+def confusion_at(
+    scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray, threshold: float
+) -> Confusion:
     """Counts for the rule `score >= threshold means synthetic`."""
     s, y = _as_pairs(scores, labels)
     flagged = s >= threshold
@@ -432,7 +440,9 @@ def confusion_at(scores: Sequence[float] | np.ndarray, labels: Sequence[int] | n
     )
 
 
-def reliability_curve(scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray, bins: int = 15) -> list[Bin]:
+def reliability_curve(
+    scores: Sequence[float] | np.ndarray, labels: Sequence[int] | np.ndarray, bins: int = 15
+) -> list[Bin]:
     """Equal-mass calibration bins: how many samples, what they claimed, how often they were synthetic.
 
     Equal-mass (quantile) rather than equal-width because a detector that puts 95 % of its output in
@@ -524,9 +534,7 @@ def fpr_at_fnr(scores: Sequence[float], labels: Sequence[int], max_fnr: float) -
     return best
 
 
-def operating_point(
-    scores: Sequence[float], labels: Sequence[int], max_fpr: float
-) -> Confusion | None:
+def operating_point(scores: Sequence[float], labels: Sequence[int], max_fpr: float) -> Confusion | None:
     """Highest-recall rule whose false-positive rate stays at or under `max_fpr`.
 
     This is the `GOAL-2` question - "at the point where BLOCK FPR <= 0.5 %, is precision >= 90 %?" -

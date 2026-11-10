@@ -28,7 +28,9 @@ from synthverify.eval.split import (
 SEED = "synthverify-thesis-v1"
 
 
-def samples(count: int = 40, *, dataset: str = "community_forensics", generator: str = "sdxl") -> list[LabeledSample]:
+def samples(
+    count: int = 40, *, dataset: str = "community_forensics", generator: str = "sdxl"
+) -> list[LabeledSample]:
     return [
         LabeledSample(
             sample_id=f"img_{i:05d}",
@@ -89,9 +91,15 @@ def test_an_empty_id_or_an_empty_seed_is_refused_rather_than_bucketed():
     "proportions, message",
     [
         ({"train": 0.5, "calibration": 0.2, "validation": 0.15}, r"omit split\(s\): held_out_test"),
-        ({"train": 1.0, "calibration": 0.0, "validation": 0.0, "held_out_test": 0.0, "test": 0.0}, r"unknown"),
+        (
+            {"train": 1.0, "calibration": 0.0, "validation": 0.0, "held_out_test": 0.0, "test": 0.0},
+            r"unknown",
+        ),
         ({"train": 0.6, "calibration": 0.6, "validation": 0.0, "held_out_test": 0.0}, r"sum to 1\.0"),
-        ({"train": -0.5, "calibration": 1.5, "validation": 0.0, "held_out_test": 0.0}, r"may not be negative"),
+        (
+            {"train": -0.5, "calibration": 1.5, "validation": 0.0, "held_out_test": 0.0},
+            r"may not be negative",
+        ),
     ],
 )
 def test_a_proportion_table_that_does_not_describe_a_partition_is_refused(proportions, message):
@@ -265,10 +273,13 @@ def test_the_file_is_jsonl_with_a_declared_format_on_the_first_line(tmp_path):
     assert sorted(row) == ["dataset", "generator", "sample_id", "split", "truth"]
 
 
-@pytest.mark.parametrize("mutate, message", [
-    (lambda h: h.pop("seed"), r"no seed"),
-    (lambda h: h.__setitem__("format", "synthverify.split/v2"), r"synthverify\.split/v1"),
-])
+@pytest.mark.parametrize(
+    "mutate, message",
+    [
+        (lambda h: h.pop("seed"), r"no seed"),
+        (lambda h: h.__setitem__("format", "synthverify.split/v2"), r"synthverify\.split/v1"),
+    ],
+)
 def test_a_header_that_cannot_be_re_derived_is_refused(tmp_path, mutate, message):
     path = SplitAssignment.build(samples(3), seed=SEED).write(split_path(tmp_path))
     lines = path.read_text(encoding="utf-8").splitlines()

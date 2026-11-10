@@ -24,7 +24,9 @@ from synthverify.ratelimits.base import RateLimiter
 def rate_limit(request: Request) -> None:
     """FastAPI dependency applied to verified media endpoints."""
     api_key = getattr(request.state, "api_key", None)
-    subject = api_key.key_id if api_key is not None else (request.client.host if request.client else "anonymous")
+    subject = (
+        api_key.key_id if api_key is not None else (request.client.host if request.client else "anonymous")
+    )
     limiter: RateLimiter = request.app.state.rate_limiter
     allowed, retry_after = limiter.check(subject)
     if not allowed:

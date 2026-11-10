@@ -146,6 +146,7 @@ class NoiseDetector(Detector):
     @staticmethod
     def _residual_structure(residual: np.ndarray) -> float:
         """Max |normalized autocorrelation| of the high-pass field at 2px lag."""
+
         def corr_at_lag(a: np.ndarray, b: np.ndarray) -> float:
             va, vb = a - a.mean(), b - b.mean()
             denom = (np.sqrt((va**2).sum()) * np.sqrt((vb**2).sum())) + 1e-9

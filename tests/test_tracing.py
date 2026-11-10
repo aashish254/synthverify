@@ -167,11 +167,15 @@ def _parse_value_and_exemplar(rest: str, line: str, number: int) -> tuple[float,
     tail = body_start[consumed:].strip().split()
     if not 1 <= len(tail) <= 2:
         raise OpenMetricsError(f"line {number}: exemplar needs its own value in {line!r}")
-    return value, timestamp, {
-        "labels": labels,
-        "value": _number(tail[0]),
-        "timestamp": _number(tail[1]) if len(tail) == 2 else None,
-    }
+    return (
+        value,
+        timestamp,
+        {
+            "labels": labels,
+            "value": _number(tail[0]),
+            "timestamp": _number(tail[1]) if len(tail) == 2 else None,
+        },
+    )
 
 
 def parse_openmetrics(text: str) -> tuple[dict[str, str], list[dict]]:
@@ -319,7 +323,17 @@ class TestTraceparentGrammar:
 
     @pytest.mark.parametrize(
         "value",
-        ["", "0" * 32, TRACE[:-1], TRACE + "0", TRACE.upper(), "z" * 32, TRACE.replace("4", "g"), None, 12345],
+        [
+            "",
+            "0" * 32,
+            TRACE[:-1],
+            TRACE + "0",
+            TRACE.upper(),
+            "z" * 32,
+            TRACE.replace("4", "g"),
+            None,
+            12345,
+        ],
     )
     def test_invalid_trace_ids(self, value):
         from synthverify.tracing import is_valid_trace_id
@@ -567,7 +581,9 @@ class TestMetricsExposition:
         registry = MetricsRegistry()
         labels = {"method": "GET", "path": "/healthz", "status": "200"}
         for _ in range(3):
-            registry.inc("synthverify_http_requests_total", labels, exemplar={"trace_id": TRACE, "span_id": SPAN})
+            registry.inc(
+                "synthverify_http_requests_total", labels, exemplar={"trace_id": TRACE, "span_id": SPAN}
+            )
         registry.set("synthverify_up", 1.0)
         kinds, samples = parse_openmetrics(registry.render_openmetrics())
         assert kinds["synthverify_http_requests"] == "counter"
@@ -585,7 +601,9 @@ class TestMetricsExposition:
         from synthverify.metrics import MetricsRegistry
 
         registry = MetricsRegistry()
-        registry.inc("synthverify_jobs_completed_total", {"risk_tier": "low"}, exemplar={"trace_id": "a" * 32})
+        registry.inc(
+            "synthverify_jobs_completed_total", {"risk_tier": "low"}, exemplar={"trace_id": "a" * 32}
+        )
         registry.inc("synthverify_jobs_completed_total", {"risk_tier": "low"}, exemplar={"trace_id": TRACE})
         index = exemplar_index(registry.render_openmetrics())
         assert [e["labels"]["trace_id"] for e in index["synthverify_jobs_completed"]] == [TRACE]
@@ -657,7 +675,7 @@ class TestOpenMetricsReaderIsStrict:
             "# TYPE synthverify_up gauge\nsynthverify_up 1 # trace_id 12345\n# EOF\n",  # unbraced, unquoted
             '# TYPE synthverify_up gauge\nsynthverify_up 1 # {other="x"} 1.0\n# EOF\n',  # label Prometheus drops
             '# TYPE synthverify_http_requests counter\nsynthverify_http_requests_total{a="b"} 1 # {trace_id="c"}\n# EOF\n',  # no value
-            '# TYPE synthverify_up gauge\nsynthverify_up 1 # {} 1.0\n# EOF\n',  # empty exemplar
+            "# TYPE synthverify_up gauge\nsynthverify_up 1 # {} 1.0\n# EOF\n",  # empty exemplar
             "# TYPE synthverify_up gauge\nsynthverify_up 1 1.0 extra\n# EOF\n",  # junk after the timestamp
             "# KIND synthverify_up gauge\n# EOF\n",  # unknown directive
             "# TYPE synthverify_up counter\nsynthverify_up_total{a=} 1\n# EOF\n",  # malformed labels
@@ -724,7 +742,11 @@ class TestRequestTraceOverHttp:
         assert scrape.status_code == 200
         assert scrape.headers["content-type"].startswith(OPENMETRICS_MEDIA_TYPE)
         index = exemplar_index(scrape.text)
-        found = [e["labels"] for e in index.get("synthverify_http_requests", []) if e["labels"].get("trace_id") == TRACE]
+        found = [
+            e["labels"]
+            for e in index.get("synthverify_http_requests", [])
+            if e["labels"].get("trace_id") == TRACE
+        ]
         assert found, f"no exemplar for {TRACE} in the scrape:\n{scrape.text}"
         # The trace id is the caller's; the span id is *this* hop's, and it is the same one the response
         # advertises in its own `traceparent`. Carrying the inbound span forward would make two hops
@@ -747,7 +769,16 @@ class TestRequestTraceOverHttp:
             '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01 # evil "x" 1',
             "00-" + "a" * 32 + "-" + "b" * 16 + "-01-" + "c" * 600,
         ],
-        ids=["garbage", "uppercase", "zero-trace", "ff-version", "bad-span", "short-trace", "comment", "oversized"],
+        ids=[
+            "garbage",
+            "uppercase",
+            "zero-trace",
+            "ff-version",
+            "bad-span",
+            "short-trace",
+            "comment",
+            "oversized",
+        ],
     )
     async def test_hostile_header_never_leaves_the_process(self, client, header):
         """The only ids that reach a label, a log line or a column are parsed-or-minted.
@@ -859,9 +890,10 @@ class TestJobRowCarriesTheTrace:
             # The untraced row hashes exactly as a pre-`0004` row does - see TestLedgerHashCompatibility
             # for the pinned digest, which is the load-bearing half of that claim.
             assert outside.entry_hash == outside.compute_hash()
-            assert AuditLedger.verify_chain(
-                session.query(AuditEvent).order_by(AuditEvent.seq.asc()).all()
-            )[0] is True
+            assert (
+                AuditLedger.verify_chain(session.query(AuditEvent).order_by(AuditEvent.seq.asc()).all())[0]
+                is True
+            )
 
     async def test_a_reanalysis_continues_its_own_trace(self, client):
         trace = await _ingest(client)
@@ -886,7 +918,9 @@ class TestLedgerRowsCarryTheTrace:
         """
         trace = await _ingest(client)
         for action in ("media.ingested", "job.created", "job.completed"):
-            items = (await client.get(f"{API}/admin/audit", params={"action": action, "limit": 50})).json()["items"]
+            items = (await client.get(f"{API}/admin/audit", params={"action": action, "limit": 50})).json()[
+                "items"
+            ]
             assert items, f"no {action} row in the ledger"
             carrying = [row["trace_id"] for row in items if row["trace_id"] == trace]
             assert carrying, f"{action} rows carry {[r['trace_id'] for r in items]}, not {trace}"
@@ -922,6 +956,7 @@ class TestWorkerLogLineCarriesTheTrace:
                 headers={"traceparent": build_traceparent(TRACE, SPAN)},
             )
             await wait_for_job(client, response.json()["job_id"])
+
             # `wait_for_job` observes the DB commit at worker.py:275; the completion line is
             # printed at worker.py:290, after the webhook-delivery work that runs between them.
             # The record is therefore eventual relative to the row the poller returns on, so
@@ -1088,7 +1123,9 @@ class TestAlertRulesShip:
 
         document = yaml.safe_load((REPO / "docker" / "prometheus-alerts.yml").read_text(encoding="utf-8"))
         shipped = document["groups"][0]["rules"]
-        assert shipped and all(str(rule.get("for", "")).strip() for rule in shipped), "a shipped rule has no `for`"
+        assert shipped and all(str(rule.get("for", "")).strip() for rule in shipped), (
+            "a shipped rule has no `for`"
+        )
 
         def mutate(parsed):
             for rule in parsed["groups"][0]["rules"]:
@@ -1122,7 +1159,9 @@ class TestAlertRulesShip:
         from synthverify.compliance.alert_rules import check_alert_rules
 
         path = tmp_path / "broken.yml"
-        path.write_text("groups:\n  - name: a\n    rules:\n      - alert: b\n       bad: [unclosed\n", encoding="utf-8")
+        path.write_text(
+            "groups:\n  - name: a\n    rules:\n      - alert: b\n       bad: [unclosed\n", encoding="utf-8"
+        )
         report = check_alert_rules(REPO, rules_path=path)
         assert {issue.kind for issue in report.issues} == {"unparseable"}
         assert "line" in report.format_text().lower()
@@ -1154,7 +1193,8 @@ class TestAlertRulesShip:
             cwd=REPO,
             capture_output=True,
             text=True,
-            timeout=300, encoding="utf-8",
+            timeout=300,
+            encoding="utf-8",
         )
         assert result.returncode == 0, result.stdout + result.stderr
         assert "RESULT: PASS" in result.stdout and "prometheus-alerts.yml" in result.stdout

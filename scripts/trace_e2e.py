@@ -149,10 +149,26 @@ def server_url(args: argparse.Namespace):
     container = f"sv-trace-{uuid.uuid4().hex[:8]}"
     print(f"no --url given: starting {IMAGE} as {container} on :{args.port}")
     subprocess.run(
-        ["docker", "run", "-d", "--name", container,
-         "-e", "POSTGRES_USER=sv", "-e", "POSTGRES_PASSWORD=sv", "-e", "POSTGRES_DB=postgres",
-         "-p", f"{args.port}:5432", IMAGE],
-        check=True, capture_output=True, text=True, encoding="utf-8",
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            container,
+            "-e",
+            "POSTGRES_USER=sv",
+            "-e",
+            "POSTGRES_PASSWORD=sv",
+            "-e",
+            "POSTGRES_DB=postgres",
+            "-p",
+            f"{args.port}:5432",
+            IMAGE,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     url = f"postgresql+pg8000://sv:sv@127.0.0.1:{args.port}/postgres"
     try:
@@ -168,11 +184,15 @@ def server_url(args: argparse.Namespace):
         engine.dispose()
         yield url
     finally:
-        subprocess.run(["docker", "rm", "-f", container], check=False,
-                       capture_output=True, text=True, encoding="utf-8")
+        subprocess.run(
+            ["docker", "rm", "-f", container], check=False, capture_output=True, text=True, encoding="utf-8"
+        )
         left = subprocess.run(
             ["docker", "ps", "-a", "--filter", f"name={container}", "--format", "{{.Names}}"],
-            check=False, capture_output=True, text=True, encoding="utf-8",
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
         ).stdout.strip()
         print(f"removed container {container}; left behind: {left or 'none'}")
 
@@ -203,7 +223,7 @@ def throwaway_database(server: str):
 #: Redefines `parse_traceparent` after the real definition, so every importer of the name binds this
 #: body. The length cap, the grammar and both id validators disappear together - which is exactly
 #: what a "just split it on dashes" implementation of trace-context looks like.
-LENIENT_REPLACEMENT = '''
+LENIENT_REPLACEMENT = """
 
 # ---- MUTATION (scripts/trace_e2e.py --mutate lenient-parser) -------------------------------
 def parse_traceparent(header):  # noqa: F811 - deliberate redefinition, mutation only
@@ -216,7 +236,7 @@ def parse_traceparent(header):  # noqa: F811 - deliberate redefinition, mutation
         version=parts[0], trace_id=parts[1], span_id=parts[2],
         sampled=parts[3].endswith("1"),
     )
-'''
+"""
 
 
 @dataclass(frozen=True)
@@ -260,8 +280,7 @@ def package_root(mode: str, scratch: Path):
         return
     root = scratch / "shadow"
     root.mkdir(parents=True)
-    shutil.copytree(REPO / "synthverify", root / "synthverify",
-                    ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(REPO / "synthverify", root / "synthverify", ignore=shutil.ignore_patterns("__pycache__"))
     patch = PATCHES[mode]
     target = root / patch.file
     text = target.read_text(encoding="utf-8")
@@ -318,8 +337,13 @@ def spawn(label: str, root: Path, args: list[str], env: dict[str, str], scratch:
     log = scratch / f"{label}.log"
     handle = log.open("w", encoding="utf-8")
     proc = subprocess.Popen(
-        [sys.executable, *args], cwd=root, env=env,
-        stdout=handle, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+        [sys.executable, *args],
+        cwd=root,
+        env=env,
+        stdout=handle,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
     )
     print(f"  started {label} (pid {proc.pid}) with package root {root}")
     return Child(label=label, proc=proc, log=log, handle=handle)
@@ -362,7 +386,8 @@ def phase_topology(client: httpx.Client, api: Child, worker: Child) -> None:
     ready = client.get("/readyz").json()
     check(
         "the API replica has no embedded worker, so the durable queue is the only thing between the two processes",
-        ready["embedded_workers"] is False and ready["job_broker"] == "postgres"
+        ready["embedded_workers"] is False
+        and ready["job_broker"] == "postgres"
         and ready["durable_queue"] is True,
         f"broker={ready['job_broker']} durable={ready['durable_queue']} "
         f"embedded_workers={ready['embedded_workers']}",
@@ -416,8 +441,11 @@ def phase_exemplar(client: httpx.Client, headers: httpx.Headers) -> str:
     try:
         parse_openmetrics(text)
     except Exception as exc:  # noqa: BLE001 - the reader's complaint is the evidence
-        check("the OpenMetrics scrape parses under a reader that rejects malformed expositions",
-              False, f"{type(exc).__name__}: {exc}")
+        check(
+            "the OpenMetrics scrape parses under a reader that rejects malformed expositions",
+            False,
+            f"{type(exc).__name__}: {exc}",
+        )
         return text
     check(
         "the OpenMetrics scrape parses under a reader that rejects malformed expositions",
@@ -461,8 +489,12 @@ def phase_hostile(client: httpx.Client) -> None:
         field_value = header.split("-")[1]
         check(
             f"hostile traceparent ({name}) is replaced by a minted id, never echoed",
-            bool(is_valid_trace_id(returned) and returned != field_value
-                 and built is not None and built.trace_id == returned),
+            bool(
+                is_valid_trace_id(returned)
+                and returned != field_value
+                and built is not None
+                and built.trace_id == returned
+            ),
             f"sent …{field_value[-14:]!r} -> X-Trace-Id {returned[:40]!r}",
         )
 
@@ -480,7 +512,8 @@ def phase_hostile(client: httpx.Client) -> None:
         client.get("/healthz", headers={"traceparent": header})
     text = scrape(client).text
     leaked = sorted(
-        name for name, header in probes.items()
+        name
+        for name, header in probes.items()
         if header.split("-")[1] in text or token in text or token.upper() in text
     )
     check(
@@ -534,8 +567,11 @@ def _tamper_with_stored_id(client: httpx.Client, database_url: str) -> int:
 
 def phase_log_lines(api: Child, worker: Child, job_id: str) -> None:
     """`AC-INFRA-6` clause 3, from the file a process wrote rather than a buffer a test filled."""
-    lines = [line for line in worker.wait_for(f"job {job_id}").splitlines()
-             if f"job {job_id}" in line and "completed" in line]
+    lines = [
+        line
+        for line in worker.wait_for(f"job {job_id}").splitlines()
+        if f"job {job_id}" in line and "completed" in line
+    ]
     check(
         "`AC-INFRA-6` clause 3: the worker's completion line is in its own captured stderr",
         bool(lines),
@@ -607,7 +643,8 @@ def phase_rules(text: str, root: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run the AC-INFRA-6 trace-correlation gate across two OS processes.")
+        description="Run the AC-INFRA-6 trace-correlation gate across two OS processes."
+    )
     parser.add_argument("--url", default=os.environ.get("SV_TEST_POSTGRES_URL", ""))
     parser.add_argument("--image", default=IMAGE)
     parser.add_argument("--port", type=int, default=8132)
@@ -620,32 +657,50 @@ def main() -> int:
     children: list[Child] = []
     try:
         with server_url(args) as server:
-            print(f"target Postgres: {server.split('@')[-1]}"
-                  + (" (a server this run did not create)" if args.url else "")
-                  + (f" | mutating: {args.mutate}" if args.mutate else ""))
+            print(
+                f"target Postgres: {server.split('@')[-1]}"
+                + (" (a server this run did not create)" if args.url else "")
+                + (f" | mutating: {args.mutate}" if args.mutate else "")
+            )
             with throwaway_database(server) as database_url:
                 with package_root(args.mutate, scratch) as root:
                     env = base_env(database_url, root, scratch)
                     port = free_port()
                     base = f"http://127.0.0.1:{port}"
-                    api = spawn("api", root, [
-                        "-m", "uvicorn", "synthverify.app:app",
-                        "--host", "127.0.0.1", "--port", str(port), "--log-level", "info",
-                    ], {**env, "SV_EMBEDDED_WORKER": "false"}, scratch)
+                    api = spawn(
+                        "api",
+                        root,
+                        [
+                            "-m",
+                            "uvicorn",
+                            "synthverify.app:app",
+                            "--host",
+                            "127.0.0.1",
+                            "--port",
+                            str(port),
+                            "--log-level",
+                            "info",
+                        ],
+                        {**env, "SV_EMBEDDED_WORKER": "false"},
+                        scratch,
+                    )
                     children.append(api)
                     wait_for_health(base, api)
-                    worker = spawn("worker", root, ["-m", "synthverify.cli", "worker"],
-                                   {**env, "SV_WORKER_COUNT": "1"}, scratch)
+                    worker = spawn(
+                        "worker",
+                        root,
+                        ["-m", "synthverify.cli", "worker"],
+                        {**env, "SV_WORKER_COUNT": "1"},
+                        scratch,
+                    )
                     children.append(worker)
-                    with httpx.Client(base_url=base, headers={"X-API-Key": ADMIN_KEY},
-                                      timeout=30) as client:
+                    with httpx.Client(base_url=base, headers={"X-API-Key": ADMIN_KEY}, timeout=30) as client:
                         phase_topology(client, api, worker)
                         job_id, headers = ingest(client)
                         wait_for_job(client, job_id)
                         text = phase_exemplar(client, headers)
                         phase_hostile(client)
-                        phase_ledger(client, database_url, job_id,
-                                     tamper=args.mutate == "tampered-trace")
+                        phase_ledger(client, database_url, job_id, tamper=args.mutate == "tampered-trace")
                         phase_log_lines(api, worker, job_id)
                         phase_rules(text, root)
     finally:
@@ -661,8 +716,12 @@ def main() -> int:
         print("  FAILED:", line)
     expected = bool(FAILURES)
     if args.expect_fail:
-        print("RESULT:", f"MUTATION CAUGHT ({len(FAILURES)} check(s) failed)" if expected
-              else "MUTATION NOT CAUGHT (the gate accepted a broken trace path)")
+        print(
+            "RESULT:",
+            f"MUTATION CAUGHT ({len(FAILURES)} check(s) failed)"
+            if expected
+            else "MUTATION NOT CAUGHT (the gate accepted a broken trace path)",
+        )
         return 0 if expected else 1
     print("RESULT:", "PASS" if not FAILURES else "FAIL")
     return 0 if not FAILURES else 1

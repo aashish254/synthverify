@@ -104,18 +104,38 @@ def valkey_server(image: str, url: str):
     port = free_port()
     print(f"starting {image} as {name} on 127.0.0.1:{port}")
     subprocess.run(
-        ["docker", "run", "-d", "--name", name, "-p", f"127.0.0.1:{port}:6379", image,
-         "--save", "", "--appendonly", "no"],
-        check=True, capture_output=True, text=True, encoding="utf-8",
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            name,
+            "-p",
+            f"127.0.0.1:{port}:6379",
+            image,
+            "--save",
+            "",
+            "--appendonly",
+            "no",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     try:
         wait_for_pong(("127.0.0.1", port))
         yield Server(host="127.0.0.1", port=port, container=name)
     finally:
-        subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True, text=True, encoding="utf-8")
+        subprocess.run(
+            ["docker", "rm", "-f", name], check=False, capture_output=True, text=True, encoding="utf-8"
+        )
         left = subprocess.run(
             ["docker", "ps", "-a", "--filter", f"name={name}", "--format", "{{.Names}}"],
-            capture_output=True, text=True, check=False, encoding="utf-8",
+            capture_output=True,
+            text=True,
+            check=False,
+            encoding="utf-8",
         ).stdout.strip()
         print(f"removed container {name}; left behind: {left or 'none'}")
 
@@ -175,9 +195,11 @@ def run_probes(env: dict[str, str], count: int = 2) -> list[dict]:
             subprocess.Popen(
                 [sys.executable, str(PROBE)],
                 cwd=REPO,
-                env={**os.environ, **env,
-                     "SV_RL_READY_FILE": str(ready_files[i]), "SV_RL_GO_FILE": str(go)},
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                env={**os.environ, **env, "SV_RL_READY_FILE": str(ready_files[i]), "SV_RL_GO_FILE": str(go)},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
             )
             for i in range(count)
         ]
@@ -195,7 +217,10 @@ def run_probes(env: dict[str, str], count: int = 2) -> list[dict]:
             try:
                 record = json.loads(stdout.strip().splitlines()[-1])
             except (ValueError, IndexError):
-                record = {"error": f"no report from the probe (exit {proc.returncode})", "stdout": stdout[:200]}
+                record = {
+                    "error": f"no report from the probe (exit {proc.returncode})",
+                    "stdout": stdout[:200],
+                }
             record["exit"] = proc.returncode
             if stderr.strip():
                 record["stderr"] = stderr.strip().splitlines()[-1][:200]
@@ -240,9 +265,24 @@ def app_process(port: int, server: Server, scratch: Path):
         "SV_RATE_LIMIT_FALLBACK_COOLDOWN_SECONDS": "2",
     }
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "synthverify.app:app",
-         "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
-        cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "synthverify.app:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=REPO,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
     )
     base = f"http://127.0.0.1:{port}"
     try:
@@ -376,7 +416,9 @@ def phase_outage(args: argparse.Namespace, client: httpx.Client, server: Server)
     """Stop the shared backend under a running app: `AC-INFRA-3(b)`, in both costumes."""
     if server.container:
         print(f"stopping container {server.container}")
-        subprocess.run(["docker", "stop", server.container], check=True, capture_output=True, text=True, encoding="utf-8")
+        subprocess.run(
+            ["docker", "stop", server.container], check=True, capture_output=True, text=True, encoding="utf-8"
+        )
     codes, retries, seconds = burst_requests(client, new_key(client, "http-outage"), 9)
     check(
         "with the shared backend stopped, the request path still answers 200/429 and never 500s",
@@ -400,7 +442,9 @@ def phase_outage(args: argparse.Namespace, client: httpx.Client, server: Server)
         f"{ready.get('rate_limit_backend')}/degraded={ready.get('rate_limit_degraded')}",
     )
     metrics = client.get("/metrics").text
-    fallback = [line for line in metrics.splitlines() if line.startswith("synthverify_rate_limit_fallback_total")]
+    fallback = [
+        line for line in metrics.splitlines() if line.startswith("synthverify_rate_limit_fallback_total")
+    ]
     check(
         "the fallback is a counted, scrapeable event rather than a silent one",
         bool(fallback) and all(float(line.rsplit(" ", 1)[1]) >= 1 for line in fallback),
@@ -421,12 +465,19 @@ def phase_outage(args: argparse.Namespace, client: httpx.Client, server: Server)
     with blackhole() as silent_port:
         reach = 6.0 if args.mutate == "no-timeout" else 0.3
         silent = run_probes(
-            base_env(args, server, "valkey", f"silent-{time.time_ns()}",
-                     **{"SV_RATE_LIMIT_TIMEOUT_SECONDS": reach,
-                        "SV_RATE_LIMIT_VALKEY_PORT": silent_port,
-                        # This check is about the timeout, so it always goes through check() and its
-                        # fallback: the mutation below is `no-timeout`, not `nofallback`.
-                        "SV_RL_MODE": "check"}),
+            base_env(
+                args,
+                server,
+                "valkey",
+                f"silent-{time.time_ns()}",
+                **{
+                    "SV_RATE_LIMIT_TIMEOUT_SECONDS": reach,
+                    "SV_RATE_LIMIT_VALKEY_PORT": silent_port,
+                    # This check is about the timeout, so it always goes through check() and its
+                    # fallback: the mutation below is `no-timeout`, not `nofallback`.
+                    "SV_RL_MODE": "check",
+                },
+            ),
             count=1,
         )
         took = float(silent[0].get("seconds", 999))
@@ -440,7 +491,9 @@ def phase_outage(args: argparse.Namespace, client: httpx.Client, server: Server)
 def phase_recovery(args: argparse.Namespace, client: httpx.Client, server: Server) -> None:
     """A limiter that degrades and never returns has quietly become n per-process budgets."""
     print(f"restarting container {server.container}")
-    subprocess.run(["docker", "start", server.container], check=True, capture_output=True, text=True, encoding="utf-8")
+    subprocess.run(
+        ["docker", "start", server.container], check=True, capture_output=True, text=True, encoding="utf-8"
+    )
     wait_for_pong(server.target)
     time.sleep(2.5)  # the app's fallback cooldown is 2s, so its next request must re-probe
     results = run_probes(base_env(args, server, "valkey", f"recovered-{time.time_ns()}"))
@@ -476,9 +529,11 @@ def main() -> int:
         args.attempts = 2 * args.burst
 
     with valkey_server(args.image, args.url) as server:
-        print(f"target Valkey at {server.host}:{server.port}"
-              + (f" as {server.container}" if server.container else " (a server this run did not create)")
-              + (f" | mutating: {args.mutate}" if args.mutate else ""))
+        print(
+            f"target Valkey at {server.host}:{server.port}"
+            + (f" as {server.container}" if server.container else " (a server this run did not create)")
+            + (f" | mutating: {args.mutate}" if args.mutate else "")
+        )
         isolated_total = phase_isolated(args, server)
         phase_shared(args, server, isolated_total)
 
@@ -496,8 +551,12 @@ def main() -> int:
         print("  FAILED:", line)
     expected = bool(FAILURES)
     if args.expect_fail:
-        print("RESULT:", f"MUTATION CAUGHT ({len(FAILURES)} check(s) failed)" if expected
-              else "MUTATION NOT CAUGHT (the gate accepted a broken limiter)")
+        print(
+            "RESULT:",
+            f"MUTATION CAUGHT ({len(FAILURES)} check(s) failed)"
+            if expected
+            else "MUTATION NOT CAUGHT (the gate accepted a broken limiter)",
+        )
         return 0 if expected else 1
     print("RESULT:", "PASS" if not FAILURES else "FAIL")
     return 0 if not FAILURES else 1

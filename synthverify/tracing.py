@@ -58,11 +58,7 @@ def new_span_id() -> str:
 
 def is_valid_trace_id(value: object) -> bool:
     """True for exactly the ids OpenMetrics will accept in a ``trace_id`` exemplar label."""
-    return (
-        isinstance(value, str)
-        and bool(_TRACE_ID_RE.match(value))
-        and value != _ZERO_TRACE_ID
-    )
+    return isinstance(value, str) and bool(_TRACE_ID_RE.match(value)) and value != _ZERO_TRACE_ID
 
 
 def is_valid_span_id(value: object) -> bool:

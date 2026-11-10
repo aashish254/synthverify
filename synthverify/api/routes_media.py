@@ -151,15 +151,23 @@ def _sniff_mime(media_type: str) -> str:
     }.get(media_type, "application/octet-stream")
 
 
-@router.post("/ingest", status_code=202, dependencies=[Depends(require_scope("media:submit")), Depends(rate_limit)])
+@router.post(
+    "/ingest", status_code=202, dependencies=[Depends(require_scope("media:submit")), Depends(rate_limit)]
+)
 def ingest_media(
     request: Request,
     file: Annotated[UploadFile | None, File(description="The media file to verify")] = None,
-    requested_detectors: Annotated[str | None, Form(description="JSON array of detector names; empty = all applicable")] = None,
+    requested_detectors: Annotated[
+        str | None, Form(description="JSON array of detector names; empty = all applicable")
+    ] = None,
     priority: Annotated[int, Form(ge=1, le=9)] = 5,
-    external_uri: Annotated[str | None, Form(description="URI reference instead of an upload (ingest adapter must resolve it)")] = None,
+    external_uri: Annotated[
+        str | None, Form(description="URI reference instead of an upload (ingest adapter must resolve it)")
+    ] = None,
     callback_url: Annotated[str | None, Form(description="Per-job webhook override")] = None,
-    idempotency_key: Annotated[str | None, Form(description="Client-supplied uniqueness key (safe retries)")] = None,
+    idempotency_key: Annotated[
+        str | None, Form(description="Client-supplied uniqueness key (safe retries)")
+    ] = None,
 ):
     """Submit media for asynchronous multi-detector verification.
 
@@ -195,7 +203,11 @@ def ingest_media(
     return _job_accepted(job, created)
 
 
-@router.post("/ingest/batch", status_code=202, dependencies=[Depends(require_scope("media:submit")), Depends(rate_limit)])
+@router.post(
+    "/ingest/batch",
+    status_code=202,
+    dependencies=[Depends(require_scope("media:submit")), Depends(rate_limit)],
+)
 def ingest_batch(
     request: Request,
     files: Annotated[list[UploadFile], File(description="Up to 20 media files")],
@@ -225,7 +237,9 @@ def ingest_batch(
                 callback_url=None,
             )
             _dispatch(request, job, created)
-            results.append({"filename": f.filename, "job_id": job.id, "status": job.status, "deduplicated": not created})
+            results.append(
+                {"filename": f.filename, "job_id": job.id, "status": job.status, "deduplicated": not created}
+            )
         except HTTPException as exc:
             results.append({"filename": f.filename, "error": exc.detail})
         except UnsupportedMediaError as exc:

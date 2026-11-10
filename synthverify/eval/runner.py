@@ -266,7 +266,9 @@ def pending_samples(
     done = 0
     if not force and path.exists() and path.stat().st_size > 0:
         table = ScoreTable.load(path)
-        complete = table.complete_sample_ids(detectors) if require_all and detectors else table.scored_sample_ids()
+        complete = (
+            table.complete_sample_ids(detectors) if require_all and detectors else table.scored_sample_ids()
+        )
         remaining = [sample for sample in selected if sample.sample_id not in complete]
         done = len(selected) - len(remaining)
         selected = remaining
@@ -306,9 +308,7 @@ def plan_run(
                 names.append(detector.name)
     thin: tuple[str, ...] = ()
     if split is not None:
-        thin = tuple(
-            f"{cell['generator']}/{cell['split']}=n{cell['n']}" for cell in split.thin_cells()
-        )
+        thin = tuple(f"{cell['generator']}/{cell['split']}=n{cell['n']}" for cell in split.thin_cells())
     return RunPlan(
         detectors=tuple(names),
         media_types=tuple(media_types),
@@ -413,7 +413,9 @@ def score_dir(
         data = sample.path.read_bytes()
         media_type = detect_media_type(sample.path.name, data)
         ctx = DetectionContext(data=data, media_type=media_type, filename=sample.path.name)
-        results = [detector.run(ctx) for detector in resolve(media_type, list(detectors) if detectors else None)]
+        results = [
+            detector.run(ctx) for detector in resolve(media_type, list(detectors) if detectors else None)
+        ]
         records.append(
             {
                 "sample_id": sample.sample_id,

@@ -257,9 +257,7 @@ def authenticate_bearer(token: str, *, settings: Settings | None = None) -> Bear
 
     role = _pick_role(claims, s.oidc_role_claim)
     if role is None:
-        raise OidcError(
-            f"Bearer token carries no recognised role under claim {s.oidc_role_claim!r}."
-        )
+        raise OidcError(f"Bearer token carries no recognised role under claim {s.oidc_role_claim!r}.")
 
     organisation = _claim_by_path(claims, s.oidc_org_claim)
     if not isinstance(organisation, str) or not organisation.strip():
@@ -268,9 +266,7 @@ def authenticate_bearer(token: str, *, settings: Settings | None = None) -> Bear
         organisation = organisation.strip()
 
     scopes = _join_scopes(_claim_by_path(claims, s.oidc_scopes_claim))
-    platform_scope = bool(
-        s.oidc_allow_platform_scope_claim and claims.get("platform_scope") is True
-    )
+    platform_scope = bool(s.oidc_allow_platform_scope_claim and claims.get("platform_scope") is True)
 
     subject = str(claims.get("sub", ""))
     key_id = f"oidc:{subject or 'anonymous'}"

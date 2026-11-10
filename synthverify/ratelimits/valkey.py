@@ -87,7 +87,9 @@ class ValkeyRateLimiter(InProcessRateLimiter):
         import valkey  # here, not at module scope: the extra is optional by FC-1 design
 
         super().__init__(rpm, burst, settings)
-        self._cooldown = cooldown if cooldown is not None else self.settings.rate_limit_fallback_cooldown_seconds
+        self._cooldown = (
+            cooldown if cooldown is not None else self.settings.rate_limit_fallback_cooldown_seconds
+        )
         reach = timeout if timeout is not None else self.settings.rate_limit_timeout_seconds
         # An idle bucket must not outlive its refill, or a quiet subject would get a free burst it
         # already spent; 2x the drain-to-refill window plus a minute of slack is the bound.

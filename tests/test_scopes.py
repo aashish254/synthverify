@@ -17,7 +17,11 @@ from httpx import ASGITransport, AsyncClient
 
 async def _mint_key(client, *, role: str, scopes: list[str] | None = None, org: str = "default") -> str:
     """Mint a key through the admin API and return its raw secret."""
-    body: dict = {"name": f"test-{role}-{'-'.join(scopes or ['noscoped'])}", "role": role, "organisation": org}
+    body: dict = {
+        "name": f"test-{role}-{'-'.join(scopes or ['noscoped'])}",
+        "role": role,
+        "organisation": org,
+    }
     if scopes is not None:
         body["scopes"] = scopes
     resp = await client.post("/api/v1/admin/keys", json=body)
@@ -106,9 +110,9 @@ async def test_legacy_key_without_scopes_keeps_role_equivalent_grant(client):
     from synthverify.app import app
 
     # Mint without scopes field at all
-    resp = await client.post("/api/v1/admin/keys", json={
-        "name": "legacy-service", "role": "service", "organisation": "default"
-    })
+    resp = await client.post(
+        "/api/v1/admin/keys", json={"name": "legacy-service", "role": "service", "organisation": "default"}
+    )
     assert resp.status_code == 201
     secret = resp.json()["key"]
 
@@ -172,10 +176,10 @@ async def test_no_scope_combination_enables_cross_org_read(client):
 @pytest.mark.anyio
 async def test_unknown_scope_token_is_refused_at_mint(client):
     """POST with an unrecognized scope token gets 422, not silent acceptance."""
-    resp = await client.post("/api/v1/admin/keys", json={
-        "name": "bad-scope", "role": "service",
-        "scopes": ["jobs:read", "made:up:scope"]
-    })
+    resp = await client.post(
+        "/api/v1/admin/keys",
+        json={"name": "bad-scope", "role": "service", "scopes": ["jobs:read", "made:up:scope"]},
+    )
     assert resp.status_code == 422, resp.text
     assert "made:up:scope" in resp.text
 

@@ -68,8 +68,11 @@ def main() -> int:
         last_section = None
         for label, filename, producer in SAMPLES:
             media_type = {
-                "jpg": "image", "png": "image", "wav": "audio",
-                "avi": "video", "txt": "text",
+                "jpg": "image",
+                "png": "image",
+                "wav": "audio",
+                "avi": "video",
+                "txt": "text",
             }[filename.rsplit(".", 1)[1]]
             if SECTIONS[media_type] != last_section:
                 last_section = SECTIONS[media_type]
@@ -80,21 +83,27 @@ def main() -> int:
             v = outcome.report.to_dict()["verdict"]
             color = ACTION_COLORS.get(v["recommended_action"], "")
 
-            print(f"\n  {BOLD}{filename}{RESET}  {DIM}({label}, {len(data):,} bytes, "
-                  f"{outcome.duration_ms:.0f} ms){RESET}")
-            print(f"  risk {v['risk_score']:.3f}/1.00  [{v['risk_tier']}]  "
-                  f"confidence {v['confidence']:.0%}  →  "
-                  f"{color}{BOLD}{v['recommended_action']}{RESET}")
+            print(
+                f"\n  {BOLD}{filename}{RESET}  {DIM}({label}, {len(data):,} bytes, "
+                f"{outcome.duration_ms:.0f} ms){RESET}"
+            )
+            print(
+                f"  risk {v['risk_score']:.3f}/1.00  [{v['risk_tier']}]  "
+                f"confidence {v['confidence']:.0%}  →  "
+                f"{color}{BOLD}{v['recommended_action']}{RESET}"
+            )
             if outcome.report.flags:
                 print(f"  flags: {', '.join(outcome.report.flags)}")
             print(f"  {DIM}{v['summary']}{RESET}")
             for evidence in outcome.report.top_evidence[:2]:
                 print(f"    • {evidence}")
 
-    print(f"\n{DIM}Next steps:"
-          f"\n  make run         → start the API + dashboard on :8080"
-          f"\n  make test        → run the {''}full test suite"
-          f"\n  open http://localhost:8080/dashboard  → operator console{RESET}\n")
+    print(
+        f"\n{DIM}Next steps:"
+        f"\n  make run         → start the API + dashboard on :8080"
+        f"\n  make test        → run the {''}full test suite"
+        f"\n  open http://localhost:8080/dashboard  → operator console{RESET}\n"
+    )
     return 0
 
 

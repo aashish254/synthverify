@@ -48,12 +48,12 @@ class TestReadLock:
     @pytest.mark.parametrize(
         "line",
         [
-            "fastapi>=0.141",           # a range is not a pin
+            "fastapi>=0.141",  # a range is not a pin
             "fastapi~=0.141.0",
             "fastapi!=0.141.1",
             'fastapi==0.141.1 ; extra == "dev"',  # a condition is not a pin
-            "fastapi==",                # a pin to nothing
-            "hg+https://example/x",     # not a `name==version` line at all
+            "fastapi==",  # a pin to nothing
+            "hg+https://example/x",  # not a `name==version` line at all
         ],
     )
     def test_anything_that_is_not_a_pin_is_rejected(self, tmp_path: Path, line: str):
@@ -160,16 +160,19 @@ class TestCheckLock:
 
     def test_a_changed_pin_is_reported_as_drift(self, tmp_path: Path):
         broken = tmp_path / "lock.txt"
-        broken.write_text(LOCK_PATH.read_text(encoding="utf-8").replace("anyio==4.14.2", "anyio==4.15.1", 1), encoding="utf-8")
+        broken.write_text(
+            LOCK_PATH.read_text(encoding="utf-8").replace("anyio==4.14.2", "anyio==4.15.1", 1),
+            encoding="utf-8",
+        )
         report = check_lock(REPO_ROOT, broken)
         drift = [i for i in report.issues if i.kind == "drift"]
-        assert [i.detail for i in drift] == [
-            "anyio: lock says 4.15.1, installed closure says 4.14.2"
-        ]
+        assert [i.detail for i in drift] == ["anyio: lock says 4.15.1, installed closure says 4.14.2"]
 
     def test_a_pin_nothing_declares_is_stale(self, tmp_path: Path):
         stale = tmp_path / "lock.txt"
-        stale.write_text(LOCK_PATH.read_text(encoding="utf-8") + "some-forgotten-package==1.2.3\n", encoding="utf-8")
+        stale.write_text(
+            LOCK_PATH.read_text(encoding="utf-8") + "some-forgotten-package==1.2.3\n", encoding="utf-8"
+        )
         report = check_lock(REPO_ROOT, stale)
         assert [i.kind for i in report.issues] == ["stale"]
         assert "some-forgotten-package" in report.issues[0].detail
@@ -196,7 +199,9 @@ class TestCheckLock:
         without = tmp_path / "without.txt"
         without.write_text(
             "\n".join(
-                line for line in LOCK_PATH.read_text(encoding="utf-8").splitlines() if not line.startswith("greenlet==")
+                line
+                for line in LOCK_PATH.read_text(encoding="utf-8").splitlines()
+                if not line.startswith("greenlet==")
             )
             + "\n",
             encoding="utf-8",
@@ -206,7 +211,10 @@ class TestCheckLock:
         assert {i.detail.split()[0].rstrip(":") for i in issues} == {"greenlet"}, issues
 
         disagreed = tmp_path / "disagreed.txt"
-        disagreed.write_text(LOCK_PATH.read_text(encoding="utf-8").replace("greenlet==3.5.6", "greenlet==9.9.9", 1), encoding="utf-8")
+        disagreed.write_text(
+            LOCK_PATH.read_text(encoding="utf-8").replace("greenlet==3.5.6", "greenlet==9.9.9", 1),
+            encoding="utf-8",
+        )
         moved = check_lock(REPO_ROOT, disagreed).issues
         assert [i.detail.split()[0].rstrip(":") for i in moved] == ["greenlet"], moved
         # Either report quotes both sides, so the reader can tell which one to fix.
@@ -234,7 +242,9 @@ class TestCheckLock:
         without = tmp_path / "without.txt"
         without.write_text(
             "\n".join(
-                line for line in LOCK_PATH.read_text(encoding="utf-8").splitlines() if not line.startswith("colorama==")
+                line
+                for line in LOCK_PATH.read_text(encoding="utf-8").splitlines()
+                if not line.startswith("colorama==")
             )
             + "\n",
             encoding="utf-8",
@@ -315,7 +325,9 @@ class TestWriteLock:
             written_pins, _ = read_lock(written)
             committed_pins, _ = read_lock(LOCK_PATH)
             dropped = set(committed_pins) - set(written_pins)
-            assert dropped <= set(inert), f"regeneration dropped non-inert pins: {sorted(dropped - set(inert))}"
+            assert dropped <= set(inert), (
+                f"regeneration dropped non-inert pins: {sorted(dropped - set(inert))}"
+            )
             assert set(written_pins) - set(committed_pins) == set()
             for key in set(written_pins) & set(committed_pins):
                 assert written_pins[key].version == committed_pins[key].version, key
@@ -355,7 +367,11 @@ class TestCli:
 
         result = subprocess.run(
             [sys.executable, "-m", "synthverify.cli", "freedom"],
-            capture_output=True, text=True, cwd=REPO_ROOT, check=False, encoding="utf-8",
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            check=False,
+            encoding="utf-8",
         )
         assert result.returncode == 0, result.stdout + result.stderr
         assert "Dependency lock:" in result.stdout

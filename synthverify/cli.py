@@ -274,9 +274,7 @@ def _cmd_score(args: argparse.Namespace) -> int:
         print(f"split sizes  : {sizes}")
         if preview:
             print(f"manifest     : {args.manifest}  (would write; a dry run writes nothing)")
-            print(
-                f"split file   : {args.split_file}  (would write; its sha256 would be {assignment.digest})"
-            )
+            print(f"split file   : {args.split_file}  (would write; its sha256 would be {assignment.digest})")
         else:
             print(f"manifest     : {args.manifest}  sha256 {manifest_digest(args.manifest)}")
             print(f"split file   : {args.split_file}  sha256 {assignment.digest}")
@@ -518,7 +516,9 @@ def _cmd_create_key(args: argparse.Namespace) -> int:
         )
         session.add(key)
         AuditLedger(session).append(
-            actor="cli", action="key.created", resource=f"key:{key.key_id}",
+            actor="cli",
+            action="key.created",
+            resource=f"key:{key.key_id}",
             detail={"role": key.role, "name": key.name},
         )
         session.commit()
@@ -562,7 +562,11 @@ def _cmd_audit_checkpoint(args: argparse.Namespace) -> int:
         if args.backfill:
             written = ledger.backfill_checkpoints()
             head = ledger.write_checkpoint()
-            label = f"{written} backfilled through seq={head.seq}" if written and head is not None else "nothing to seal"
+            label = (
+                f"{written} backfilled through seq={head.seq}"
+                if written and head is not None
+                else "nothing to seal"
+            )
         else:
             head = ledger.write_checkpoint()
             label = f"seq={head.seq}" if head is not None else "the ledger is empty"
@@ -678,10 +682,12 @@ def _cmd_retention_sweep(args: argparse.Namespace) -> int:
         return 0
     plan = report.plan
     verb = "would delete" if report.dry_run else "deleted"
-    print(f"retention sweep {verb} ({report.counts['media_assets_deleted']} media asset(s), "
-          f"{report.counts['jobs_deleted']} job(s), "
-          f"{len(report.media_objects_removed)} media object(s), "
-          f"{len(report.artifact_files_removed)} artifact file(s))")
+    print(
+        f"retention sweep {verb} ({report.counts['media_assets_deleted']} media asset(s), "
+        f"{report.counts['jobs_deleted']} job(s), "
+        f"{len(report.media_objects_removed)} media object(s), "
+        f"{len(report.artifact_files_removed)} artifact file(s))"
+    )
     for org, days in sorted(plan.ttl_days.items()):
         print(f"  {org:24s} TTL {days} day(s)")
     if plan.held:
@@ -803,7 +809,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--groups",
         default="",
         help="comma-separated root groups (default: every declared group). Inside the shipped "
-        'image, `--groups core,vision` grades what that image actually installs',
+        "image, `--groups core,vision` grades what that image actually installs",
     )
     p_lic.add_argument("--json", action="store_true", help="machine-readable scan report")
     p_lic.set_defaults(func=_cmd_licenses)
@@ -826,7 +832,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="T39 gate: docker/requirements-lock.txt must pin exactly the declared dependency closure",
     )
     p_lock.add_argument("--project-root", default=".", help="directory holding pyproject.toml")
-    p_lock.add_argument("--lock", default=None, help="lock file to check (default docker/requirements-lock.txt)")
+    p_lock.add_argument(
+        "--lock", default=None, help="lock file to check (default docker/requirements-lock.txt)"
+    )
     p_lock.add_argument("--write", action="store_true", help="regenerate the lock from the installed closure")
     p_lock.add_argument("--json", action="store_true", help="machine-readable check report")
     p_lock.set_defaults(func=_cmd_dependency_lock)
@@ -842,7 +850,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_ret.add_argument("--organisation", default=None, help="sweep one organisation instead of all")
     p_ret.add_argument(
-        "--limit", type=int, default=None, help="cap the assets in one pass (default: $SV_RETENTION_BATCH_LIMIT)"
+        "--limit",
+        type=int,
+        default=None,
+        help="cap the assets in one pass (default: $SV_RETENTION_BATCH_LIMIT)",
     )
     p_ret.add_argument("--json", action="store_true", help="machine-readable sweep report")
     p_ret.set_defaults(func=_cmd_retention_sweep)
@@ -851,8 +862,12 @@ def build_parser() -> argparse.ArgumentParser:
         "alert-rules",
         help="AC-INFRA-6 gate: docker/prometheus-alerts.yml must parse and name only metrics this build emits",
     )
-    p_alerts.add_argument("--project-root", default=".", help="directory holding docker/prometheus-alerts.yml")
-    p_alerts.add_argument("--rules", default=None, help="rules file to check (default docker/prometheus-alerts.yml)")
+    p_alerts.add_argument(
+        "--project-root", default=".", help="directory holding docker/prometheus-alerts.yml"
+    )
+    p_alerts.add_argument(
+        "--rules", default=None, help="rules file to check (default docker/prometheus-alerts.yml)"
+    )
     p_alerts.add_argument("--json", action="store_true", help="machine-readable gate report")
     p_alerts.set_defaults(func=_cmd_alert_rules)
 
@@ -884,9 +899,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="split seed. Changing it re-labels every sample, so it is a committed choice rather than "
         "a flag to roll (default: %(default)s)",
     )
-    p_score.add_argument(
-        "--manifest", help="corpus manifest CSV to read -- or to write, with --scan-dir"
-    )
+    p_score.add_argument("--manifest", help="corpus manifest CSV to read -- or to write, with --scan-dir")
     p_score.add_argument(
         "--split-file", help="committed split assignment JSONL to read -- or to write, with --scan-dir"
     )
@@ -907,7 +920,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="a sample counts as done only when every requested detector has a row for it",
     )
     p_score.add_argument(
-        "--force", action="store_true", help="re-score samples that already have rows (both are kept; last write wins)"
+        "--force",
+        action="store_true",
+        help="re-score samples that already have rows (both are kept; last write wins)",
     )
     p_score.add_argument(
         "--overwrite", action="store_true", help="with --scan-dir, replace an existing manifest or split file"
@@ -930,11 +945,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--split",
         help="comma-separated split(s) to read from --split-file (default with it: held_out_test)",
     )
-    p_eval.add_argument("--detectors", help="comma-separated detector names (default: every one in the table)")
-    p_eval.add_argument("--by-generator", action="store_true", help="add the per-generator breakdown (RQ1's table)")
-    p_eval.add_argument("--threshold", type=float, default=0.5, help="decision threshold for the confusion counts")
+    p_eval.add_argument(
+        "--detectors", help="comma-separated detector names (default: every one in the table)"
+    )
+    p_eval.add_argument(
+        "--by-generator", action="store_true", help="add the per-generator breakdown (RQ1's table)"
+    )
+    p_eval.add_argument(
+        "--threshold", type=float, default=0.5, help="decision threshold for the confusion counts"
+    )
     p_eval.add_argument("--bins", type=int, default=15, help="equal-mass calibration bins for ECE")
-    p_eval.add_argument("--level", type=float, default=0.95, help="confidence level for the DeLong AUC interval")
+    p_eval.add_argument(
+        "--level", type=float, default=0.95, help="confidence level for the DeLong AUC interval"
+    )
     p_eval.add_argument(
         "--allow-thin",
         action="store_true",
@@ -944,7 +967,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--held-out-set", default="held_out_test", help="name recorded in the JSON eval report"
     )
     p_eval.add_argument("--json", action="store_true", help="emit the manifest-shaped eval report as well")
-    p_eval.add_argument("--dry-run", action="store_true", help="print what each detector would read and compute nothing")
+    p_eval.add_argument(
+        "--dry-run", action="store_true", help="print what each detector would read and compute nothing"
+    )
     p_eval.set_defaults(func=_cmd_eval)
 
     return parser

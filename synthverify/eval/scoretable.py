@@ -150,9 +150,7 @@ class ScoreRow:
         for field_name in ("score", "confidence"):
             value = getattr(parsed, field_name)
             if not math.isfinite(value) or not 0.0 <= value <= 1.0:
-                raise ScoreTableError(
-                    f"{field_name} must be a finite number in [0, 1], got {value!r}"
-                )
+                raise ScoreTableError(f"{field_name} must be a finite number in [0, 1], got {value!r}")
         if not math.isfinite(parsed.latency_ms) or parsed.latency_ms < 0.0:
             raise ScoreTableError(f"latency_ms must be finite and >= 0, got {parsed.latency_ms!r}")
         if not parsed.sample_id or not parsed.detector:
@@ -222,9 +220,7 @@ class ScoreTable:
             else:
                 order.append(key)
             by_key[key] = parsed
-        return cls(
-            [by_key[k] for k in order], path=p, torn_line=torn, duplicate_rows=duplicates
-        )
+        return cls([by_key[k] for k in order], path=p, torn_line=torn, duplicate_rows=duplicates)
 
     def detectors(self) -> list[str]:
         return sorted({r.detector for r in self.rows})
@@ -285,9 +281,7 @@ class ScoreTable:
         rows = [
             r
             for r in self.rows
-            if r.detector == detector
-            and r.status == status
-            and (dataset is None or r.dataset == dataset)
+            if r.detector == detector and r.status == status and (dataset is None or r.dataset == dataset)
         ]
         scores = np.array([r.score for r in rows], dtype=np.float64)
         labels = np.array([r.truth for r in rows], dtype=np.int64)
@@ -437,9 +431,7 @@ def _iter_records(path: Path) -> Iterator[tuple[Mapping[str, str] | None, bool]]
     lines = text.splitlines(keepends=True)
     header = lines[0].rstrip("\r\n")
     if header != ",".join(COLUMNS):
-        raise ScoreTableError(
-            f"{path}: first line is {header!r}, expected the header {','.join(COLUMNS)!r}"
-        )
+        raise ScoreTableError(f"{path}: first line is {header!r}, expected the header {','.join(COLUMNS)!r}")
     for index, line in enumerate(lines[1:], start=1):
         terminated = line.endswith("\n")
         body = line.rstrip("\r\n")

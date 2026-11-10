@@ -69,7 +69,8 @@ def cli(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]
         cwd=str(cwd or REPO),
         capture_output=True,
         text=True,
-        check=False, encoding="utf-8",
+        check=False,
+        encoding="utf-8",
     )
 
 
@@ -152,17 +153,33 @@ def main() -> int:
         split_file = scratch / "split.jsonl"
         table = scratch / "scores.csv"
         score_args = (
-            "--manifest", str(manifest),
-            "--split-file", str(split_file),
-            "--root", str(corpus),
-            "--table", str(table),
+            "--manifest",
+            str(manifest),
+            "--split-file",
+            str(split_file),
+            "--root",
+            str(corpus),
+            "--table",
+            str(table),
         )
 
         preview = cli(
-            "score", "--scan-dir", str(corpus), "--dataset", "fixture",
-            "--generator", "sdxl", "--real-dir", "photos",
-            "--manifest", str(manifest), "--split-file", str(split_file),
-            "--table", str(table), "--dry-run",
+            "score",
+            "--scan-dir",
+            str(corpus),
+            "--dataset",
+            "fixture",
+            "--generator",
+            "sdxl",
+            "--real-dir",
+            "photos",
+            "--manifest",
+            str(manifest),
+            "--split-file",
+            str(split_file),
+            "--table",
+            str(table),
+            "--dry-run",
         )
         check("dry run exits 0", preview.returncode == 0, preview.stderr[-120:])
         check(
@@ -181,9 +198,21 @@ def main() -> int:
         )
 
         run1 = cli(
-            "score", "--scan-dir", str(corpus), "--dataset", "fixture",
-            "--generator", "sdxl", "--real-dir", "photos",
-            "--manifest", str(manifest), "--split-file", str(split_file), "--table", str(table),
+            "score",
+            "--scan-dir",
+            str(corpus),
+            "--dataset",
+            "fixture",
+            "--generator",
+            "sdxl",
+            "--real-dir",
+            "photos",
+            "--manifest",
+            str(manifest),
+            "--split-file",
+            str(split_file),
+            "--table",
+            str(table),
         )
         check("scoring run exits 0", run1.returncode == 0, run1.stderr[-160:])
         check("run wrote the three artefacts", manifest.exists() and split_file.exists() and table.exists())
@@ -224,8 +253,17 @@ def main() -> int:
         # A mistake in the argv has to be a message and an exit code, not a stack: `--sample` and
         # `--limit` are validated inside the runner, which the handler used to leave outside its guard.
         typo = cli(
-            "score", "--manifest", str(manifest), "--split-file", str(split_file),
-            "--root", str(corpus), "--table", str(table), "--sample", "no_such_file.png",
+            "score",
+            "--manifest",
+            str(manifest),
+            "--split-file",
+            str(split_file),
+            "--root",
+            str(corpus),
+            "--table",
+            str(table),
+            "--sample",
+            "no_such_file.png",
         )
         check(
             "an unknown --sample is refused with a message rather than a traceback",
@@ -233,8 +271,17 @@ def main() -> int:
             f"exit={typo.returncode}",
         )
         negative = cli(
-            "score", "--manifest", str(manifest), "--split-file", str(split_file),
-            "--root", str(corpus), "--table", str(table), "--limit", "-1",
+            "score",
+            "--manifest",
+            str(manifest),
+            "--split-file",
+            str(split_file),
+            "--root",
+            str(corpus),
+            "--table",
+            str(table),
+            "--limit",
+            "-1",
         )
         check(
             "a negative --limit is refused the same way",
@@ -267,7 +314,9 @@ def main() -> int:
             f"{thin.stdout.count('auc=')} line(s) for {len(runnable)} running detector(s)",
         )
         check("the AUC line carries its interval and n", "auc=0." in thin.stdout and "n=12" in thin.stdout)
-        check("the per-generator cell is printed", re.search(r"\n  sdxl THIN\s+n=12", thin.stdout) is not None)
+        check(
+            "the per-generator cell is printed", re.search(r"\n  sdxl THIN\s+n=12", thin.stdout) is not None
+        )
         check(
             "a detector that never ran is still refused",
             "jpeg_history               refused: no samples" in thin.stdout,
@@ -281,7 +330,9 @@ def main() -> int:
             f"printed={printed_auc.group(1) if printed_auc else '-'} library={library_auc:.6f}",
         )
 
-        as_json = cli("eval", "--table", str(table), "--allow-thin", "--by-generator", "--detectors", "ela", "--json")
+        as_json = cli(
+            "eval", "--table", str(table), "--allow-thin", "--by-generator", "--detectors", "ela", "--json"
+        )
         payload = json.loads(as_json.stdout[as_json.stdout.index("{") :] or "{}")
         entry = payload.get("detectors", {}).get("ela", {})
         check(
@@ -308,7 +359,8 @@ def main() -> int:
         total_rows = len(rows) - 1
         check(
             "the split file partitions the corpus it was built from",
-            sum(sizes.values()) == 12 and sizes.get("train", 0) > sizes.get("held_out_test", 0) > 0
+            sum(sizes.values()) == 12
+            and sizes.get("train", 0) > sizes.get("held_out_test", 0) > 0
             and sizes.get("calibration", 0) > 0,
             sizes,
         )
@@ -336,7 +388,8 @@ def main() -> int:
         )
         check(
             "naming a split moves the denominator rather than only its label",
-            ela_rows_printed(scoped.stdout) == held and ela_rows_printed(whole_train.stdout) == sizes["train"],
+            ela_rows_printed(scoped.stdout) == held
+            and ela_rows_printed(whole_train.stdout) == sizes["train"],
             f"held_out_test={ela_rows_printed(scoped.stdout)} train={ela_rows_printed(whole_train.stdout)}",
         )
 
@@ -357,8 +410,17 @@ def main() -> int:
         )
         train_only = scratch / "train-only.csv"
         cli(
-            "score", "--manifest", str(manifest), "--split-file", str(split_file),
-            "--root", str(corpus), "--table", str(train_only), "--split", "train",
+            "score",
+            "--manifest",
+            str(manifest),
+            "--split-file",
+            str(split_file),
+            "--root",
+            str(corpus),
+            "--table",
+            str(train_only),
+            "--split",
+            "train",
         )
         gap = cli(
             "eval", "--table", str(train_only), "--split-file", str(split_file), "--split", "calibration"
@@ -410,8 +472,17 @@ def main() -> int:
 
         two = sizes["train"] + held
         report = cli(
-            "eval", "--table", str(table), "--split-file", str(split_file),
-            "--split", "train,held_out_test", "--allow-thin", "--detectors", "ela", "--json",
+            "eval",
+            "--table",
+            str(table),
+            "--split-file",
+            str(split_file),
+            "--split",
+            "train,held_out_test",
+            "--allow-thin",
+            "--detectors",
+            "ela",
+            "--json",
         )
         payload = json.loads(report.stdout[report.stdout.index("{") :])
         check(
@@ -446,8 +517,11 @@ def main() -> int:
         # if the partition stops producing a single-class one, the check below reports that it has
         # nothing to check instead of passing vacuously.
         thin_cell = next(
-            (k for k in ("held_out_test", "calibration", "validation", "train")
-             if len({r["truth"] for r in split_rows(split_file, k)}) == 1),
+            (
+                k
+                for k in ("held_out_test", "calibration", "validation", "train")
+                if len({r["truth"] for r in split_rows(split_file, k)}) == 1
+            ),
             None,
         )
         if thin_cell is None:
@@ -458,8 +532,14 @@ def main() -> int:
             )
         else:
             one_class = cli(
-                "eval", "--table", str(table), "--split-file", str(split_file),
-                "--split", thin_cell, "--allow-thin",
+                "eval",
+                "--table",
+                str(table),
+                "--split-file",
+                str(split_file),
+                "--split",
+                thin_cell,
+                "--allow-thin",
             )
             check(
                 "a selection that leaves one class is refused with its reason, not a number",

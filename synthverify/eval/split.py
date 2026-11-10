@@ -280,7 +280,11 @@ class SplitAssignment:
 
     def content(self) -> str:
         """Canonical, byte-stable text: JSON lines, header first, keys sorted, rows in key order."""
-        lines = [json.dumps({"format": _FORMAT, "seed": self.seed, "proportions": self.proportions}, sort_keys=True)]
+        lines = [
+            json.dumps(
+                {"format": _FORMAT, "seed": self.seed, "proportions": self.proportions}, sort_keys=True
+            )
+        ]
         for key in sorted(self.members):
             dataset, _, sample_id = key.partition("/")
             lines.append(

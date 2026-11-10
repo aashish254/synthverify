@@ -259,7 +259,9 @@ def scan_by_generator(
     """
     base = Path(root)
     if not base.is_dir():
-        raise CorpusError(f"{base} is not a directory - a corpus is operator-supplied, nothing here downloads it")
+        raise CorpusError(
+            f"{base} is not a directory - a corpus is operator-supplied, nothing here downloads it"
+        )
     generators = fake_generators or {}
     if not generators and not real_directory:
         raise CorpusError(f"{base}: declare at least one generator directory or a real directory")

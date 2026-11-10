@@ -72,7 +72,9 @@ class TestTheProjectMetadataIsStructurallySound:
 
     def test_the_core_requirement_list_is_attached_to_the_project_table(self) -> None:
         project = PYPROJECT["project"]
-        assert "dependencies" in project, "`dependencies` fell out of [project] - see the comment at [project.urls]"
+        assert "dependencies" in project, (
+            "`dependencies` fell out of [project] - see the comment at [project.urls]"
+        )
         assert len(project["dependencies"]) == 11, "FC-1's core root count is documented as 11 requirements"
         assert "dependencies" not in project.get("urls", {}), "`dependencies` landed inside [project.urls]"
 
@@ -110,7 +112,7 @@ class TestTheProjectMetadataIsStructurallySound:
         )
 
     def test_typing_classifier_is_backed_by_a_pep_561_marker(self) -> None:
-        """"Typing :: Typed" is a claim about the installed artifact, not about the source tree."""
+        """ "Typing :: Typed" is a claim about the installed artifact, not about the source tree."""
         classifiers = PYPROJECT["project"]["classifiers"]
         typed = any(classifier.startswith("Typing ::") for classifier in classifiers)
         assert typed == (REPO_ROOT / "synthverify" / "py.typed").is_file(), (
@@ -133,7 +135,7 @@ class TestTheInstallerCoversEveryDeclaredRoot:
 
     def test_the_makefile_installs_every_optional_extra(self) -> None:
         declared = set(PYPROJECT["project"]["optional-dependencies"])
-        recipe = re.search(r'^ALL_EXTRAS\s*:=\s*(\S+)\s*$', MAKEFILE, re.MULTILINE)
+        recipe = re.search(r"^ALL_EXTRAS\s*:=\s*(\S+)\s*$", MAKEFILE, re.MULTILINE)
         assert recipe, "make setup must name its extras through ALL_EXTRAS, not inline"
         installed = set(recipe.group(1).split(","))
         assert installed == declared, (
@@ -146,7 +148,7 @@ class TestTheInstallerCoversEveryDeclaredRoot:
         setup = re.search(r"^setup:.*?(?=\n\w[\w-]*:|\Z)", MAKEFILE, re.MULTILINE | re.DOTALL)
         assert setup
         body = setup.group(0)
-        assert '-c docker/requirements-lock.txt' in body, "setup must install through the lock"
+        assert "-c docker/requirements-lock.txt" in body, "setup must install through the lock"
         assert '".[$(ALL_EXTRAS)]"' in body, "setup must install the ALL_EXTRAS set, not a subset"
         assert "--system-site-packages" not in body, (
             "a venv that inherits site-packages lets an un-locked package satisfy a pin locally "
@@ -171,7 +173,9 @@ class TestTheInstallerCoversEveryDeclaredRoot:
 
         probe = re.search(r"sys\.version_info < \((\d+), (\d+)\)", MAKEFILE)
         assert probe, "make setup must probe for the floor rather than assume the reader's python3"
-        assert (int(probe.group(1)), int(probe.group(2))) == floor, "the Makefile probe and the metadata disagree"
+        assert (int(probe.group(1)), int(probe.group(2))) == floor, (
+            "the Makefile probe and the metadata disagree"
+        )
         assert "python3.10" not in MAKEFILE, "the probe list still offers an interpreter below the floor"
 
         install = (REPO_ROOT / "docs" / "INSTALL.md").read_text(encoding="utf-8")
@@ -201,7 +205,7 @@ class TestTheInstallerCoversEveryDeclaredRoot:
             for c in PYPROJECT["project"]["classifiers"]
             if (m := re.fullmatch(r"Programming Language :: Python :: (3\.\d+)", c))
         }
-        run = set(re.search(r'python-version:\s*\[([^\]]+)\]', job).group(1).replace('"', "").split(","))
+        run = set(re.search(r"python-version:\s*\[([^\]]+)\]", job).group(1).replace('"', "").split(","))
         assert {v.strip() for v in run} == advertised, (
             f"classifiers advertise {sorted(advertised)} but the portability matrix runs "
             f"{sorted(v.strip() for v in run)}"
@@ -217,7 +221,11 @@ class TestTheInstallerCoversEveryDeclaredRoot:
         cannot honour.
         """
         dockerfile = (REPO_ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
-        extras = set(re.search(r'pip install -c requirements-lock\.txt "\.\[([\w,]+)\]"', dockerfile).group(1).split(","))
+        extras = set(
+            re.search(r'pip install -c requirements-lock\.txt "\.\[([\w,]+)\]"', dockerfile)
+            .group(1)
+            .split(",")
+        )
         assert "vision" in extras
         assert "valkey" in extras, (
             "docker-compose.yml names the shared bucket as the scale-out path, so the shipped "
@@ -264,7 +272,9 @@ class TestNoClaimDependsOnTheAuthorsMachine:
                 for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
                     if token in line:
                         offenders.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: {token}")
-        assert not offenders, "these read as instructions to a reader who does not have this box: " + "; ".join(offenders)
+        assert not offenders, (
+            "these read as instructions to a reader who does not have this box: " + "; ".join(offenders)
+        )
 
     def test_the_quickstart_does_not_assume_an_existing_venv(self) -> None:
         """`./.venv/bin/python ...` is only a first command if something created `.venv` first."""
@@ -306,9 +316,12 @@ class TestDoctorDescribesABrokenEnvironment:
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
-            check=False, encoding="utf-8",
+            check=False,
+            encoding="utf-8",
         )
-        assert proc.returncode == 0, f"doctor failed in the environment running the suite:\n{proc.stdout}{proc.stderr}"
+        assert proc.returncode == 0, (
+            f"doctor failed in the environment running the suite:\n{proc.stdout}{proc.stderr}"
+        )
 
     def test_a_missing_extra_is_named_with_the_command_that_fixes_it(self) -> None:
         doctor = _doctor()
@@ -343,7 +356,11 @@ class TestDoctorDescribesABrokenEnvironment:
                 "base": Path("/usr"),
                 "pyvenv_cfg": "include-system-site-packages = true\n",
             },
-            "clean-venv": {"prefix": tmp_path / ".venv", "base": Path("/usr"), "pyvenv_cfg": "include-system-site-packages = false\n"},
+            "clean-venv": {
+                "prefix": tmp_path / ".venv",
+                "base": Path("/usr"),
+                "pyvenv_cfg": "include-system-site-packages = false\n",
+            },
         }.items():
             report = doctor.Report(quiet=False)
             doctor.check_self_contained(report, **kwargs)
@@ -363,7 +380,10 @@ class TestDoctorDescribesABrokenEnvironment:
         doctor.check_self_contained(report)
         statuses = {subject: status for status, subject, _ in report.rows}
         inherits = bool(
-            re.search(r"include-system-site-packages\s*=\s*true", (Path(sys.prefix) / "pyvenv.cfg").read_text(encoding="utf-8"))
+            re.search(
+                r"include-system-site-packages\s*=\s*true",
+                (Path(sys.prefix) / "pyvenv.cfg").read_text(encoding="utf-8"),
+            )
             if (Path(sys.prefix) / "pyvenv.cfg").is_file()
             else False
         )
@@ -376,7 +396,7 @@ class TestDoctorDescribesABrokenEnvironment:
         doctor = _doctor()
         naming = doctor.requirement_name
         assert naming("valkey>=6.0,<7") == "valkey"
-        assert naming('uvicorn[standard]>=0.27') == "uvicorn"
+        assert naming("uvicorn[standard]>=0.27") == "uvicorn"
         assert naming("async-timeout>=4.0.3; python_version < '3.11.3'") == "async-timeout"
         assert naming("opencv-python>=4.8") == "opencv-python"
 
@@ -401,7 +421,9 @@ class TestTheFirstBootCredential:
 
         url, teardown = new_database_url(tmp_path, "bootstrap")
         monkeypatch.setattr(app_module, "PROJECT_ROOT", tmp_path)
-        monkeypatch.setattr(app_module, "get_settings", lambda: Settings(environment="development", bootstrap_admin_key=None))
+        monkeypatch.setattr(
+            app_module, "get_settings", lambda: Settings(environment="development", bootstrap_admin_key=None)
+        )
         db = Database(url)
         db.create_all()
         previous = os.umask(umask)
@@ -412,7 +434,9 @@ class TestTheFirstBootCredential:
             teardown()
         assert secret, "a database with no admin key must produce one"
         path = tmp_path / "data" / "bootstrap_admin_key.txt"
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600, f"umask {oct(umask)} leaked into the key file's mode"
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600, (
+            f"umask {oct(umask)} leaked into the key file's mode"
+        )
         assert path.read_text(encoding="utf-8").strip() == secret
         return secret, path
 
@@ -463,7 +487,9 @@ class TestTheFirstBootCredential:
 
         url, teardown = new_database_url(tmp_path, "bootstrap-twice")
         monkeypatch.setattr(app_module, "PROJECT_ROOT", tmp_path)
-        monkeypatch.setattr(app_module, "get_settings", lambda: Settings(environment="development", bootstrap_admin_key=None))
+        monkeypatch.setattr(
+            app_module, "get_settings", lambda: Settings(environment="development", bootstrap_admin_key=None)
+        )
         db = Database(url)
         db.create_all()
         try:
@@ -484,7 +510,11 @@ class TestTheFirstBootCredential:
         supplied = "sv_live_" + "0" * 32
         url, teardown = new_database_url(tmp_path, "bootstrap-env")
         monkeypatch.setattr(app_module, "PROJECT_ROOT", tmp_path)
-        monkeypatch.setattr(app_module, "get_settings", lambda: Settings(environment="production", bootstrap_admin_key=supplied))
+        monkeypatch.setattr(
+            app_module,
+            "get_settings",
+            lambda: Settings(environment="production", bootstrap_admin_key=supplied),
+        )
         db = Database(url)
         db.create_all()
         try:

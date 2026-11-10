@@ -250,7 +250,9 @@ class TestOutcomeFence:
         """Token and lease clear (nobody owns the job now); `claimed_by` stays (who ran it last)."""
         job_id = self._claimed(isolated_db)
         with isolated_db.session() as session:
-            assert _write_outcome(session, job_id, JobClaim(job_id, "owner-token", "w0"), {"status": "completed"})
+            assert _write_outcome(
+                session, job_id, JobClaim(job_id, "owner-token", "w0"), {"status": "completed"}
+            )
             session.commit()
         with isolated_db.session() as session:
             job = session.get(Job, job_id)
@@ -262,7 +264,9 @@ class TestOutcomeFence:
         """The lease moved on while this worker was still computing. Its write must vanish."""
         job_id = self._claimed(isolated_db, token="new-owner")
         with isolated_db.session() as session:
-            assert not _write_outcome(session, job_id, JobClaim(job_id, "expired-token", "w0"), {"status": "completed"})
+            assert not _write_outcome(
+                session, job_id, JobClaim(job_id, "expired-token", "w0"), {"status": "completed"}
+            )
             session.commit()
         with isolated_db.session() as session:
             job = session.get(Job, job_id)
@@ -499,9 +503,9 @@ class TestTwoConsumersExactlyOnce:
             while time.monotonic() < deadline:
                 with worker_db.session() as session:
                     pending = session.execute(
-                        select(sa.func.count()).select_from(Job).where(
-                            Job.status.in_([JobStatus.QUEUED.value, JobStatus.RUNNING.value])
-                        )
+                        select(sa.func.count())
+                        .select_from(Job)
+                        .where(Job.status.in_([JobStatus.QUEUED.value, JobStatus.RUNNING.value]))
                     ).scalar_one()
                 if pending == 0:
                     break

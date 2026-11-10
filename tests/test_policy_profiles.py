@@ -89,8 +89,11 @@ class TestProfileApi:
         assert resp.status_code == 422  # reserved name
         resp = await client.post(
             f"{API}/admin/policy/profiles",
-            json={"name": "bad-order", "organisation": "org-a",
-                  "thresholds": {**STRICT, "review_score": 0.95}},
+            json={
+                "name": "bad-order",
+                "organisation": "org-a",
+                "thresholds": {**STRICT, "review_score": 0.95},
+            },
         )
         assert resp.status_code == 422  # review > escalate
         await client.post(
@@ -106,7 +109,9 @@ class TestProfileApi:
         assert (await client.delete(f"{API}/admin/policy/profiles/missing")).status_code == 404
 
     async def test_analyst_cannot_manage_profiles(self, client):
-        analyst = (await client.post(f"{API}/admin/keys", json={"name": "an", "role": "analyst"})).json()["key"]
+        analyst = (await client.post(f"{API}/admin/keys", json={"name": "an", "role": "analyst"})).json()[
+            "key"
+        ]
         for method in ("get", "post", "delete"):
             url = f"{API}/admin/policy/profiles" if method != "delete" else f"{API}/admin/policy/profiles/x"
             resp = await getattr(client, method)(url, headers={"X-API-Key": analyst})
@@ -124,13 +129,19 @@ class TestProfileApi:
 
 async def _submit_for_org(client, organisation: str) -> dict:
     """Ingest a natural photo with a service key bound to ``organisation``."""
-    key = (await client.post(
-        f"{API}/admin/keys",
-        json={"name": f"svc-{organisation}-{time.monotonic_ns()}", "role": "service",
-              "organisation": organisation},
-    )).json()["key"]
+    key = (
+        await client.post(
+            f"{API}/admin/keys",
+            json={
+                "name": f"svc-{organisation}-{time.monotonic_ns()}",
+                "role": "service",
+                "organisation": organisation,
+            },
+        )
+    ).json()["key"]
     resp = await client.post(
-        f"{API}/media/ingest", headers={"X-API-Key": key},
+        f"{API}/media/ingest",
+        headers={"X-API-Key": key},
         files={"file": ("a.jpg", natural_photo())},
     )
     job = await wait_for_job(client, resp.json()["job_id"])
@@ -167,14 +178,19 @@ class TestOrgScopedRouting:
             f"{API}/admin/policy/profiles",
             json={"name": "org-a-strict", "organisation": "org-a", "thresholds": STRICT},
         )
-        key = (await client.post(
-            f"{API}/admin/keys",
-            json={"name": "sync-a", "role": "analyst", "organisation": "org-a"},
-        )).json()["key"]
-        report = (await client.post(
-            f"{API}/media/analyze", headers={"X-API-Key": key},
-            files={"file": ("a.jpg", natural_photo())},
-        )).json()
+        key = (
+            await client.post(
+                f"{API}/admin/keys",
+                json={"name": "sync-a", "role": "analyst", "organisation": "org-a"},
+            )
+        ).json()["key"]
+        report = (
+            await client.post(
+                f"{API}/media/analyze",
+                headers={"X-API-Key": key},
+                files={"file": ("a.jpg", natural_photo())},
+            )
+        ).json()
         assert report["policy_name"] == "org-a-strict"
         assert report["verdict"]["recommended_action"] == "MANUAL_REVIEW"
 
@@ -206,10 +222,12 @@ class TestArtifacts:
 
     async def test_cross_org_denied_as_404(self, client):
         job_id = await self._completed_image_job(client)
-        other = (await client.post(
-            f"{API}/admin/keys",
-            json={"name": "outsider", "role": "analyst", "organisation": "org-x"},
-        )).json()["key"]
+        other = (
+            await client.post(
+                f"{API}/admin/keys",
+                json={"name": "outsider", "role": "analyst", "organisation": "org-x"},
+            )
+        ).json()["key"]
         headers = {"X-API-Key": other}
         assert (await client.get(f"{API}/jobs/{job_id}/artifacts", headers=headers)).status_code == 404
         assert (await client.get(f"{API}/jobs/{job_id}/artifacts/0", headers=headers)).status_code == 404
@@ -225,9 +243,16 @@ class TestArtifacts:
             sha_prefix = job.media.sha256[:12]
             # filename matches the prefix, but the decoy file lives outside the dir
             # (full re-assignment: in-place JSON mutation is not change-tracked)
-            job.result = {**job.result, "artifacts": [
-                {"detector": "ela", "name": "x.png",
-                 "path": str(decoy.with_name(f"{sha_prefix}_ela_ela_heatmap.png"))}]}
+            job.result = {
+                **job.result,
+                "artifacts": [
+                    {
+                        "detector": "ela",
+                        "name": "x.png",
+                        "path": str(decoy.with_name(f"{sha_prefix}_ela_ela_heatmap.png")),
+                    }
+                ],
+            }
             session.commit()
         resp = await client.get(f"{API}/jobs/{job_id}/artifacts/0")
         # the stored path is never followed: at best the genuine in-dir file is
@@ -236,8 +261,10 @@ class TestArtifacts:
         assert b"secret-bytes" not in resp.content
         with db.session() as session:
             job = session.get(Job, job_id)
-            job.result = {**job.result, "artifacts": [
-                {"detector": "ela", "name": "x.png", "path": "/etc/passwd"}]}
+            job.result = {
+                **job.result,
+                "artifacts": [{"detector": "ela", "name": "x.png", "path": "/etc/passwd"}],
+            }
             session.commit()
         assert (await client.get(f"{API}/jobs/{job_id}/artifacts/0")).status_code == 404
 

@@ -158,7 +158,7 @@ PATCHES: dict[str, Patch] = {
         file="synthverify/retention.py",
         old="    remove_storage(store, report, settings=settings)",
         new="    try:\n        remove_storage(store, report, settings=settings)\n"
-        '    except Exception as exc:  # noqa: BLE001 - the refusal stops being the pass\'s failure\n'
+        "    except Exception as exc:  # noqa: BLE001 - the refusal stops being the pass's failure\n"
         '        logger.warning("retention: storage removal failed: %s", exc)',
         why="a bucket that refuses the delete turns the sweep into a success, and the leak never reaches a metric, an alert or an operator",
     ),
@@ -180,9 +180,7 @@ def shadow_root(mode: str, scratch: Path):
     if root.exists():
         shutil.rmtree(root)
     root.mkdir(parents=True)
-    shutil.copytree(
-        REPO / "synthverify", root / "synthverify", ignore=shutil.ignore_patterns("__pycache__")
-    )
+    shutil.copytree(REPO / "synthverify", root / "synthverify", ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copytree(REPO / "tests", root / "tests", ignore=shutil.ignore_patterns("__pycache__"))
     # pytest reads its asyncio and marker configuration out of here. Without it the child cannot
     # collect the suite's `async def` cases at all, and a run that collected nothing looks like a
@@ -233,7 +231,8 @@ def run_suite(root: Path, scratch: Path, junit: Path) -> tuple[int, int, list[st
         env=env,
         capture_output=True,
         text=True,
-        timeout=900, encoding="utf-8",
+        timeout=900,
+        encoding="utf-8",
     )
     if not junit.exists():
         raise RuntimeError(f"the suite produced no junit:\n{proc.stdout[-3000:]}{proc.stderr[-2000:]}")

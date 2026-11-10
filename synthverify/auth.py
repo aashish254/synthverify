@@ -57,6 +57,7 @@ class Principal(Protocol):
     @property
     def scopes(self) -> str | None: ...
 
+
 # ------------------------------------------------------------------ scope vocabulary (REQ-IDAM-2)
 
 #: The canonical set of scope tokens the system recognizes.
@@ -84,11 +85,17 @@ SCOPE_VOCABULARY: frozenset[str] = frozenset(
 ROLE_SCOPES: dict[str, frozenset[str]] = {
     UserRole.ADMIN.value: SCOPE_VOCABULARY,
     UserRole.ANALYST.value: frozenset(
-        {"media:submit", "media:read", "jobs:read", "jobs:write", "artifacts:read", "admin:policy:read", "retention:read"}
+        {
+            "media:submit",
+            "media:read",
+            "jobs:read",
+            "jobs:write",
+            "artifacts:read",
+            "admin:policy:read",
+            "retention:read",
+        }
     ),
-    UserRole.SERVICE.value: frozenset(
-        {"media:submit", "media:read", "jobs:read", "artifacts:read"}
-    ),
+    UserRole.SERVICE.value: frozenset({"media:submit", "media:read", "jobs:read", "artifacts:read"}),
 }
 
 
@@ -270,6 +277,7 @@ def require_scope(*scopes: str):
 
 
 # ------------------------------------------------------------------ tenancy
+
 
 def is_platform_scoped(api_key: ApiKey | BearerPrincipal) -> bool:
     """Does this credential reach every organisation? A property of the key, not of its role."""

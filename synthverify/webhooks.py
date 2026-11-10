@@ -46,12 +46,16 @@ def build_job_payload(event_type: str, job_dict: dict[str, Any]) -> dict[str, An
 
 def enqueue_deliveries(session: Session, job: Job, event_type: str = "job.completed") -> list[str]:
     """Create delivery rows for every active endpoint subscribed to this event."""
-    endpoints = session.execute(
-        select(WebhookEndpoint).where(
-            WebhookEndpoint.active.is_(True),
-            WebhookEndpoint.organisation == job.organisation,
+    endpoints = (
+        session.execute(
+            select(WebhookEndpoint).where(
+                WebhookEndpoint.active.is_(True),
+                WebhookEndpoint.organisation == job.organisation,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     ids = []
     for ep in endpoints:
         if event_type not in (ep.events or []) and "*" not in (ep.events or []):
@@ -135,9 +139,13 @@ def deliver_now(session: Session, delivery_id: str) -> bool:
 
 def due_deliveries(session: Session, limit: int = 20) -> list[WebhookDelivery]:
     now = datetime.now(UTC)
-    candidates = session.execute(
-        select(WebhookDelivery)
-        .where(WebhookDelivery.status == DeliveryStatus.FAILED_RETRYING.value)
-        .limit(limit * 2)
-    ).scalars().all()
+    candidates = (
+        session.execute(
+            select(WebhookDelivery)
+            .where(WebhookDelivery.status == DeliveryStatus.FAILED_RETRYING.value)
+            .limit(limit * 2)
+        )
+        .scalars()
+        .all()
+    )
     return [d for d in candidates if (as_utc(d.next_attempt_at) or now) <= now][:limit]

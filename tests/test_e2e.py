@@ -35,7 +35,12 @@ class TestCLI:
         env.update(env_overrides or {})
         return subprocess.run(  # noqa: S603
             [PY, "-m", "synthverify.cli", *args],
-            capture_output=True, text=True, cwd=str(PROJECT), env=env, timeout=120, encoding="utf-8",
+            capture_output=True,
+            text=True,
+            cwd=str(PROJECT),
+            env=env,
+            timeout=120,
+            encoding="utf-8",
         )
 
     def test_list_detectors(self):
@@ -73,9 +78,7 @@ class TestCLI:
         assert "VERIFIED" in result.stdout
 
     def test_create_key_prints_secret(self, database_env):
-        result = self._run(
-            "create-key", "--name", "robot", "--role", "service", env_overrides=database_env
-        )
+        result = self._run("create-key", "--name", "robot", "--role", "service", env_overrides=database_env)
         assert result.returncode == 0
         assert "sv_live_" in result.stdout
 

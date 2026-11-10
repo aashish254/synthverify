@@ -254,7 +254,8 @@ def run_suite(root: Path, scratch: Path, junit: Path) -> tuple[int, int, list[st
         env=env,
         capture_output=True,
         text=True,
-        timeout=900, encoding="utf-8",
+        timeout=900,
+        encoding="utf-8",
     )
     if not junit.exists():
         raise RuntimeError(f"the suite produced no junit:\n{proc.stdout[-3000:]}{proc.stderr[-2000:]}")

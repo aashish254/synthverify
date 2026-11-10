@@ -111,7 +111,11 @@ async def create_key(request: Request, body: KeyCreate):
         )
         session.commit()
         session.refresh(key)
-        return {"key": secret, "record": key.to_dict(), "warning": "Store this secret now - it is not retrievable later."}
+        return {
+            "key": secret,
+            "record": key.to_dict(),
+            "warning": "Store this secret now - it is not retrievable later.",
+        }
     finally:
         session.close()
 
@@ -185,7 +189,10 @@ async def create_webhook(request: Request, body: WebhookCreate):
         )
         session.commit()
         session.refresh(endpoint)
-        return {**endpoint.to_dict(include_secret=True), "warning": "Store the signing secret now - it is not retrievable later."}
+        return {
+            **endpoint.to_dict(include_secret=True),
+            "warning": "Store the signing secret now - it is not retrievable later.",
+        }
     finally:
         session.close()
 
@@ -194,7 +201,11 @@ async def create_webhook(request: Request, body: WebhookCreate):
 async def list_webhooks(request: Request):
     session = request.app.state.db.session()
     try:
-        endpoints = session.execute(select(WebhookEndpoint).order_by(WebhookEndpoint.created_at.desc())).scalars().all()
+        endpoints = (
+            session.execute(select(WebhookEndpoint).order_by(WebhookEndpoint.created_at.desc()))
+            .scalars()
+            .all()
+        )
         return {"items": [e.to_dict() for e in endpoints]}
     finally:
         session.close()
@@ -258,7 +269,12 @@ def test_webhook(request: Request, webhook_id: str):
         session.add(delivery)
         session.commit()
         ok = deliver_now(session, delivery.id)
-        return {"delivery_id": delivery.id, "delivered": ok, "status": delivery.status, "response_code": delivery.response_code}
+        return {
+            "delivery_id": delivery.id,
+            "delivered": ok,
+            "status": delivery.status,
+            "response_code": delivery.response_code,
+        }
     finally:
         session.close()
 
@@ -306,17 +322,26 @@ def verify_audit_chain(request: Request):
 async def stats(request: Request):
     session = request.app.state.db.session()
     try:
-        by_status = dict(
-            session.execute(select(Job.status, func.count(Job.id)).group_by(Job.status)).all()
-        )
+        by_status = dict(session.execute(select(Job.status, func.count(Job.id)).group_by(Job.status)).all())
         by_tier = dict(
             session.execute(
-                select(Job.risk_tier, func.count(Job.id)).where(Job.risk_tier.is_not(None)).group_by(Job.risk_tier)
+                select(Job.risk_tier, func.count(Job.id))
+                .where(Job.risk_tier.is_not(None))
+                .group_by(Job.risk_tier)
             ).all()
         )
         by_action: dict[str, int] = {}
         avg_latency: float | None = None
-        recent = session.execute(select(Job).where(Job.status == JobStatus.COMPLETED.value).order_by(Job.created_at.desc()).limit(200)).scalars().all()
+        recent = (
+            session.execute(
+                select(Job)
+                .where(Job.status == JobStatus.COMPLETED.value)
+                .order_by(Job.created_at.desc())
+                .limit(200)
+            )
+            .scalars()
+            .all()
+        )
         durations: list[float] = []
         for job in recent:
             result = job.result or {}
@@ -329,7 +354,11 @@ async def stats(request: Request):
             avg_latency = sum(durations) / len(durations)
         queue_depth = request.app.state.broker.depth()
         deliveries = dict(
-            session.execute(select(WebhookDelivery.status, func.count(WebhookDelivery.id)).group_by(WebhookDelivery.status)).all()
+            session.execute(
+                select(WebhookDelivery.status, func.count(WebhookDelivery.id)).group_by(
+                    WebhookDelivery.status
+                )
+            ).all()
         )
         return {
             "jobs_by_status": by_status,
@@ -412,9 +441,11 @@ async def put_policy(request: Request, body: PolicyIn):
 async def list_policy_profiles(request: Request):
     session = request.app.state.db.session()
     try:
-        profiles = session.execute(
-            select(PolicyProfile).order_by(PolicyProfile.organisation, PolicyProfile.name)
-        ).scalars().all()
+        profiles = (
+            session.execute(select(PolicyProfile).order_by(PolicyProfile.organisation, PolicyProfile.name))
+            .scalars()
+            .all()
+        )
         return {"items": [p.to_dict() for p in profiles]}
     finally:
         session.close()
@@ -540,9 +571,7 @@ class HoldIn(BaseModel):
     @classmethod
     def _well_formed_identifier(cls, value: str) -> str:
         if not (_DIGEST_RE.fullmatch(value) or _ID_RE.fullmatch(value)):
-            raise ValueError(
-                "resource_ref must be a 64-character media sha256 or a 32-character job id"
-            )
+            raise ValueError("resource_ref must be a 64-character media sha256 or a 32-character job id")
         return value
 
 
@@ -558,9 +587,7 @@ async def list_retention_policies(request: Request):
     settings = get_settings()
     session = request.app.state.db.session()
     try:
-        rows = session.execute(
-            select(RetentionPolicy).order_by(RetentionPolicy.organisation)
-        ).scalars().all()
+        rows = session.execute(select(RetentionPolicy).order_by(RetentionPolicy.organisation)).scalars().all()
         return {"items": [r.to_dict() for r in rows], "default_days": settings.retention_default_days}
     finally:
         session.close()
@@ -754,4 +781,3 @@ def run_retention_sweep(request: Request, body: SweepIn):
         return report.to_dict()
     finally:
         session.close()
-

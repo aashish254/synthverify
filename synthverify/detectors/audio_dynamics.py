@@ -46,7 +46,9 @@ class AudioDynamicsDetector(Detector):
 
         digital_silence = float((np.abs(frames[silent]).max() < 1e-6).mean()) if silent.any() else 0.0
         silence_durs = silence_runs * (FRAME_MS / 1000.0)
-        silence_cv = float(np.std(silence_durs) / (np.mean(silence_durs) + 1e-6)) if len(silence_durs) >= 2 else 0.0
+        silence_cv = (
+            float(np.std(silence_durs) / (np.mean(silence_durs) + 1e-6)) if len(silence_durs) >= 2 else 0.0
+        )
 
         peak = float(np.abs(samples).max())
         p95 = float(np.percentile(rms, 95)) + 1e-9

@@ -77,7 +77,14 @@ class FetchError(RuntimeError):
 
 def rows_url(offset: int, length: int) -> str:
     query = urllib.parse.urlencode(
-        {"dataset": DATASET, "config": CONFIG, "split": SPLIT, "offset": offset, "length": length, "partial": "false"}
+        {
+            "dataset": DATASET,
+            "config": CONFIG,
+            "split": SPLIT,
+            "offset": offset,
+            "length": length,
+            "partial": "false",
+        }
     )
     return f"{ROWS_URL}?{query}"
 
@@ -134,7 +141,7 @@ def run(plan_path: Path, out: Path, provenance: Path, *, limit_bytes: int, dry: 
         seen.add(cell["dir"])
         if cell["kind"] == "fake" and cell.get("generator") in (None, "", "real"):
             raise FetchError(f"{plan_path}: a fake cell needs a generator label other than 'real'")
-        for column in (cell.get("require") or {}):
+        for column in cell.get("require") or {}:
             if column not in METADATA_COLUMNS:
                 raise FetchError(
                     f"{plan_path}: cell {cell['dir']!r} requires {column!r}, which is not a column of "
@@ -186,7 +193,9 @@ def run(plan_path: Path, out: Path, provenance: Path, *, limit_bytes: int, dry: 
             offset = int(start)
             misses = 0
             ended = False
-            while offset < int(start) + int(span) and got < want and bytes_fetched < limit_bytes and not ended:
+            while (
+                offset < int(start) + int(span) and got < want and bytes_fetched < limit_bytes and not ended
+            ):
                 length = min(MAX_PAGE, int(start) + int(span) - offset, want - got + 10)
                 page = fetch_page(offset, length)
                 if not page:
@@ -257,7 +266,9 @@ def run(plan_path: Path, out: Path, provenance: Path, *, limit_bytes: int, dry: 
                         "request_url": rows_url(offset, length),
                         "cell": cell["dir"],
                         "kind": cell["kind"],
-                        "generator": "real" if cell["kind"] == "real" else cell.get("generator", cell["model_name"]),
+                        "generator": "real"
+                        if cell["kind"] == "real"
+                        else cell.get("generator", cell["model_name"]),
                         "truth": truth,
                         "file": str(Path(cell["dir"]) / name),
                         "bytes": len(blob),
@@ -307,7 +318,9 @@ def main(argv: list[str] | None = None) -> int:
         default=900,
         help="stop after this many megabytes, so one pass cannot spend the whole download budget",
     )
-    parser.add_argument("--dry-run", action="store_true", help="read the live API and validate the plan, but write no file")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="read the live API and validate the plan, but write no file"
+    )
     args = parser.parse_args(argv)
     provenance = args.provenance or (args.out / "provenance.jsonl")
     try:

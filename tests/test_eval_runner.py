@@ -98,7 +98,9 @@ def scanned(tmp_path: Path, *, count: int = 6) -> list[Sample]:
 
 
 def resolver(*detectors: Detector):
-    by_type = {media: [d for d in detectors if media in d.media_types] for media in ("image", "video", "audio")}
+    by_type = {
+        media: [d for d in detectors if media in d.media_types] for media in ("image", "video", "audio")
+    }
 
     def _resolve(media_type: str, requested: list[str] | None) -> list[Detector]:
         pool = by_type.get(media_type, [])
@@ -118,9 +120,7 @@ def test_a_plan_counts_the_corpus_without_reading_a_byte_of_it(tmp_path):
     root = tmp_path / "corpus"
     # Paths that cannot be opened at all: a plan that tried to decode would raise, and a plan that
     # raises is not something an operator will run before a six-hour pass.
-    samples = [
-        Sample(f"img_{i}", "d", "sdxl", 1, root / "missing" / f"img_{i}.png") for i in range(250)
-    ]
+    samples = [Sample(f"img_{i}", "d", "sdxl", 1, root / "missing" / f"img_{i}.png") for i in range(250)]
     plan = plan_run(samples, table_path=table_path(tmp_path), resolver=resolver(Stub("a"), Stub("b")))
     assert (plan.corpus_total, plan.to_score, plan.already_done) == (250, 250, 0)
     assert plan.detectors == ("a", "b")
@@ -179,7 +179,7 @@ def test_a_detector_that_raises_becomes_an_error_row_rather_than_a_dead_run(tmp_
 def test_an_unreadable_file_is_reported_as_a_gap_and_never_as_a_zero(tmp_path):
     root = tmp_path / "corpus"
     (root / "sdxl").mkdir(parents=True)
-    here = (root / "sdxl" / "here.png")
+    here = root / "sdxl" / "here.png"
     here.write_bytes(PNG)
     samples = [
         Sample("here", "d", "sdxl", 1, here),
@@ -234,7 +234,9 @@ def test_force_re_scores_into_an_append_only_table_that_keeps_both_answers(tmp_p
     forced = score_corpus(samples, table_path=table, resolver=resolver(revised), force=True)
     assert (forced.rows_written, forced.samples_scored, forced.skipped_existing) == (6, 6, 0)
     loaded = ScoreTable.load(table)
-    assert len(table.read_text(encoding="utf-8").strip().splitlines()) == 13, "header + 12 rows: nothing overwritten"
+    assert len(table.read_text(encoding="utf-8").strip().splitlines()) == 13, (
+        "header + 12 rows: nothing overwritten"
+    )
     assert len(loaded.rows) == 6 and loaded.duplicate_rows == 6
     scores, _labels = loaded.vectors("alpha")
     assert len(scores) == 6, "last-write-wins, so a re-score does not double-count"
@@ -314,7 +316,10 @@ def test_an_errored_detector_still_counts_as_a_row_so_the_run_does_not_loop_fore
     summary = score_corpus(samples, table_path=table, resolver=resolver(Stub("good"), Stub("bad", boom=True)))
     assert summary.status_counts["bad"] == {"error": 4}
     again = score_corpus(
-        samples, table_path=table, detectors=["good", "bad"], resolver=resolver(Stub("good"), Stub("bad", boom=True))
+        samples,
+        table_path=table,
+        detectors=["good", "bad"],
+        resolver=resolver(Stub("good"), Stub("bad", boom=True)),
     )
     assert again.rows_written == 0, "a resume that re-scores a deterministic failure never terminates"
 
@@ -335,7 +340,11 @@ def test_a_negative_limit_is_a_typo_caught_before_the_write(tmp_path):
 def test_a_split_joined_to_a_manifest_yields_samples_the_runner_can_open(tmp_path):
     root = corpus(tmp_path, count=6)
     samples = scan_by_generator(
-        root, dataset="d", fake_generators={"sdxl": "sdxl"}, real_directory="photos", require_real_separately=False
+        root,
+        dataset="d",
+        fake_generators={"sdxl": "sdxl"},
+        real_directory="photos",
+        require_real_separately=False,
     )
     manifest = write_manifest(samples, tmp_path / "corpus.csv", root=root)
     assignment = SplitAssignment.build(samples, seed="s").write(tmp_path / "split.jsonl")
@@ -347,7 +356,11 @@ def test_a_split_joined_to_a_manifest_yields_samples_the_runner_can_open(tmp_pat
 def test_a_split_that_names_a_sample_the_manifest_lost_is_refused(tmp_path):
     root = corpus(tmp_path, count=6)
     samples = scan_by_generator(
-        root, dataset="d", fake_generators={"sdxl": "sdxl"}, real_directory="photos", require_real_separately=False
+        root,
+        dataset="d",
+        fake_generators={"sdxl": "sdxl"},
+        real_directory="photos",
+        require_real_separately=False,
     )
     assignment = SplitAssignment.build(samples, seed="s").write(tmp_path / "split.jsonl")
     fewer = write_manifest(samples[:-2], tmp_path / "thin.csv", root=root)
@@ -454,6 +467,7 @@ def test_a_sample_the_split_file_never_named_is_outside_every_number(tmp_path):
 
 
 # ---------------------------------------------------------------- the stranger's directory
+
 
 def test_a_plain_directory_scores_without_a_manifest_and_writes_the_records_out(tmp_path):
     root = tmp_path / "my_photos"
