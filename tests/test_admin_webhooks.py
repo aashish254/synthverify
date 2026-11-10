@@ -34,7 +34,9 @@ class TestJobAdministration:
     async def test_reanalyze_creates_new_job(self, client):
         job = (await client.post(f"{API}/media/ingest", files={"file": ("d.jpg", doctored_photo())})).json()
         await wait_for_job(client, job["job_id"])
-        resp = await client.post(f"{API}/jobs/{job['job_id']}/reanalyze", params={"requested_detectors": '["ela"]'})
+        resp = await client.post(
+            f"{API}/jobs/{job['job_id']}/reanalyze", params={"requested_detectors": '["ela"]'}
+        )
         assert resp.status_code == 202
         new_id = resp.json()["job_id"]
         assert new_id != job["job_id"]
@@ -59,8 +61,12 @@ class TestJobAdministration:
             db = Database()
             session = db.session()
             asset = MediaAsset(
-                sha256=sha256_bytes(data), media_type="image", filename="q.jpg",
-                size_bytes=len(data), storage_path="/tmp/q.jpg", organisation="default",
+                sha256=sha256_bytes(data),
+                media_type="image",
+                filename="q.jpg",
+                size_bytes=len(data),
+                storage_path="/tmp/q.jpg",
+                organisation="default",
             )
             session.add(asset)
             session.flush()
@@ -89,14 +95,24 @@ class TestAdminSurface:
     async def test_policy_validation_ordering(self, client):
         resp = await client.put(
             f"{API}/admin/policy",
-            json={"block_score": 0.3, "escalate_score": 0.7, "review_score": 0.4,
-                  "low_confidence": 0.3, "min_coverage": 0.5},
+            json={
+                "block_score": 0.3,
+                "escalate_score": 0.7,
+                "review_score": 0.4,
+                "low_confidence": 0.3,
+                "min_coverage": 0.5,
+            },
         )
         assert resp.status_code == 422  # block < escalate is invalid
         resp = await client.put(
             f"{API}/admin/policy",
-            json={"block_score": 0.9, "escalate_score": 0.7, "review_score": 0.4,
-                  "low_confidence": 0.3, "min_coverage": 0.5},
+            json={
+                "block_score": 0.9,
+                "escalate_score": 0.7,
+                "review_score": 0.4,
+                "low_confidence": 0.3,
+                "min_coverage": 0.5,
+            },
         )
         assert resp.status_code == 200
         current = (await client.get(f"{API}/admin/policy")).json()
@@ -105,9 +121,19 @@ class TestAdminSurface:
     async def test_detector_catalog(self, client):
         cat = (await client.get(f"{API}/admin/detectors")).json()["items"]
         names = {d["name"] for d in cat}
-        assert {"ela", "noise", "metadata", "frequency", "jpeg_history",
-                "audio_spectral", "audio_dynamics", "audio_metadata",
-                "video_temporal", "video_metadata", "text_stylometry"} <= names
+        assert {
+            "ela",
+            "noise",
+            "metadata",
+            "frequency",
+            "jpeg_history",
+            "audio_spectral",
+            "audio_dynamics",
+            "audio_metadata",
+            "video_temporal",
+            "video_metadata",
+            "text_stylometry",
+        } <= names
         for d in cat:
             assert d["description"]
 
@@ -146,9 +172,7 @@ class TestAuditLedger:
             # tamper: rewrite an old row's action
             db = Database()
             session = db.session()
-            victim = session.execute(
-                select(AuditEvent).order_by(AuditEvent.seq.asc())
-            ).scalars().first()
+            victim = session.execute(select(AuditEvent).order_by(AuditEvent.seq.asc())).scalars().first()
             victim.action = "key.created_TAMPERED"
             session.commit()
             session.close()

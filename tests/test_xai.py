@@ -13,7 +13,9 @@ from synthverify.xai import (
 )
 
 
-def det(name: str, score: float, conf: float, weight: float = 1.0, flags: list[str] | None = None) -> DetectorResult:
+def det(
+    name: str, score: float, conf: float, weight: float = 1.0, flags: list[str] | None = None
+) -> DetectorResult:
     d = DetectorResult(detector=name, media_type="image", score=score, confidence=conf)
     d.flags = flags or []
     if flags:
@@ -44,7 +46,9 @@ class TestFusion:
         assert "inconclusive" in report.summary.lower() or "could not be assessed" in report.summary.lower()
 
     def test_all_errored_inconclusive(self):
-        bad = DetectorResult(detector="ela", media_type="image", score=0, confidence=0, status=ResultStatus.ERROR)
+        bad = DetectorResult(
+            detector="ela", media_type="image", score=0, confidence=0, status=ResultStatus.ERROR
+        )
         bad.error = "boom"
         report = agg([bad])
         assert not report.conclusive
@@ -84,8 +88,12 @@ class TestFusion:
     def test_low_coverage_inconclusive(self):
         results = [det("ela", 0.9, 0.9)]
         skipped = DetectorResult(
-            detector="metadata", media_type="image", score=0, confidence=0,
-            status=ResultStatus.SKIPPED, skip_reason="n/a",
+            detector="metadata",
+            media_type="image",
+            score=0,
+            confidence=0,
+            status=ResultStatus.SKIPPED,
+            skip_reason="n/a",
         )
         report = agg([results[0]] + [skipped] * 3)
         # coverage 0.25 < min 0.5 -> inconclusive even though ela screamed
@@ -171,7 +179,9 @@ class TestExplainability:
         assert "verdict" in blob and "detectors" in blob
 
     def test_inconclusive_narrative_honest(self):
-        bad = DetectorResult(detector="ela", media_type="image", score=0, confidence=0, status=ResultStatus.ERROR)
+        bad = DetectorResult(
+            detector="ela", media_type="image", score=0, confidence=0, status=ResultStatus.ERROR
+        )
         bad.error = "decode failed"
         report = agg([bad])
         assert any("INCONCLUSIVE" in p for p in report.narrative)

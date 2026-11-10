@@ -67,9 +67,7 @@ def upgrade() -> None:
             sa.Column("chain_hash", sa.String(length=64), nullable=False),
             sa.PrimaryKeyConstraint("seq"),
         )
-        op.create_index(
-            "ix_audit_checkpoints_chain_hash", "audit_checkpoints", ["chain_hash"], unique=False
-        )
+        op.create_index("ix_audit_checkpoints_chain_hash", "audit_checkpoints", ["chain_hash"], unique=False)
 
 
 def downgrade() -> None:

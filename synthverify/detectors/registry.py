@@ -47,9 +47,7 @@ def get(name: str) -> Detector:
     try:
         return _REGISTRY[name]
     except KeyError:
-        raise KeyError(
-            f"Unknown detector '{name}'. Available: {sorted(_REGISTRY)}"
-        ) from None
+        raise KeyError(f"Unknown detector '{name}'. Available: {sorted(_REGISTRY)}") from None
 
 
 def all_detectors() -> dict[str, Detector]:

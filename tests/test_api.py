@@ -38,9 +38,7 @@ class TestAuth:
         assert resp.status_code == 401
 
     async def test_bearer_authorization_accepted(self, client):
-        resp = await client.get(
-            f"{API}/jobs", headers={"Authorization": f"Bearer {ADMIN_SECRET}"}
-        )
+        resp = await client.get(f"{API}/jobs", headers={"Authorization": f"Bearer {ADMIN_SECRET}"})
         assert resp.status_code == 200
 
     async def test_role_enforcement(self, client):
@@ -51,17 +49,28 @@ class TestAuth:
         assert resp.status_code == 403
         # but can submit media
         resp = await client.post(
-            f"{API}/media/analyze", headers={"X-API-Key": service_key},
+            f"{API}/media/analyze",
+            headers={"X-API-Key": service_key},
             files={"file": ("a.jpg", natural_photo())},
         )
         assert resp.status_code == 200
         # analyst can read but not administer
-        analyst_key = (await client.post(f"{API}/admin/keys", json={"name": "an", "role": "analyst"})).json()["key"]
+        analyst_key = (await client.post(f"{API}/admin/keys", json={"name": "an", "role": "analyst"})).json()[
+            "key"
+        ]
         resp = await client.get(f"{API}/jobs", headers={"X-API-Key": analyst_key})
         assert resp.status_code == 200
-        resp = await client.put(f"{API}/admin/policy", headers={"X-API-Key": analyst_key},
-                                json={"block_score": 0.9, "escalate_score": 0.7, "review_score": 0.4,
-                                      "low_confidence": 0.3, "min_coverage": 0.5})
+        resp = await client.put(
+            f"{API}/admin/policy",
+            headers={"X-API-Key": analyst_key},
+            json={
+                "block_score": 0.9,
+                "escalate_score": 0.7,
+                "review_score": 0.4,
+                "low_confidence": 0.3,
+                "min_coverage": 0.5,
+            },
+        )
         assert resp.status_code == 403
 
     async def test_revoked_key_rejected(self, client):
@@ -74,10 +83,12 @@ class TestAuth:
         assert resp.status_code == 401
 
     async def test_organisation_isolation(self, client):
-        other = (await client.post(
-            f"{API}/admin/keys",
-            json={"name": "other-org", "role": "analyst", "organisation": "org-b"},
-        )).json()["key"]
+        other = (
+            await client.post(
+                f"{API}/admin/keys",
+                json={"name": "other-org", "role": "analyst", "organisation": "org-b"},
+            )
+        ).json()["key"]
         # submit under default org
         job = (await client.post(f"{API}/media/ingest", files={"file": ("a.jpg", natural_photo())})).json()
         await wait_for_job(client, job["job_id"])
@@ -256,9 +267,7 @@ class TestJobQueueSummary:
     """
 
     async def test_summary_action_agrees_with_the_detail_report(self, client):
-        ingest = await client.post(
-            f"{API}/media/ingest", files={"file": ("act.jpg", ai_generated_photo())}
-        )
+        ingest = await client.post(f"{API}/media/ingest", files={"file": ("act.jpg", ai_generated_photo())})
         job_id = ingest.json()["job_id"]
         await wait_for_job(client, job_id)
         items = (await client.get(f"{API}/jobs?limit=100")).json()["items"]
@@ -278,4 +287,3 @@ class TestJobQueueSummary:
         rows = [line for line in html.splitlines() if "recommended_action" in line and "j." in line]
         assert rows, "the jobs table no longer renders an action column"
         assert all("j.result" not in line for line in rows), rows
-

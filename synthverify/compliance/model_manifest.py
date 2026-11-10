@@ -303,9 +303,7 @@ def _validate_eval(source: str, report: Any, gates: Any = None) -> list[Manifest
         # AC-DET-3: a metric that regressed past its committed gate fails CI.
         worse = value > float(bound) if key in ("eer", "ece") else value < float(bound)
         if worse:
-            issues.append(
-                ManifestIssue(prefix, key, f"measured {value} breaches the committed gate {bound}")
-            )
+            issues.append(ManifestIssue(prefix, key, f"measured {value} breaches the committed gate {bound}"))
     return issues
 
 

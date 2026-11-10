@@ -191,9 +191,7 @@ class SweepReport:
 # ------------------------------------------------------------------ policy lookup
 
 
-def effective_ttl_days(
-    session: Session, organisation: str, settings: Settings | None = None
-) -> int | None:
+def effective_ttl_days(session: Session, organisation: str, settings: Settings | None = None) -> int | None:
     """Days this organisation's media may live, or ``None`` for "keep it".
 
     The per-organisation row wins outright; the global default is the fallback. There is deliberately
@@ -251,9 +249,13 @@ def plan_sweep(
     cap = limit if limit is not None else settings.retention_batch_limit
     plan = SweepPlan(now=now)
 
-    orgs = session.execute(
-        select(MediaAsset.organisation).where(MediaAsset.organisation.is_not(None)).distinct()
-    ).scalars().all()
+    orgs = (
+        session.execute(
+            select(MediaAsset.organisation).where(MediaAsset.organisation.is_not(None)).distinct()
+        )
+        .scalars()
+        .all()
+    )
     for org in sorted({org for org in orgs if org}):
         if organisation is not None and org != organisation:
             continue
@@ -271,20 +273,26 @@ def plan_sweep(
         # case this exists for) and re-checked in Python through `as_utc` - SQLite ignores
         # `DateTime(timezone=True)` and hands back naive datetimes, so every comparison on that side of
         # the boundary goes through the normaliser.
-        rows = session.execute(
-            select(MediaAsset)
-            .where(MediaAsset.organisation == org, MediaAsset.created_at < cutoff)
-            .order_by(MediaAsset.created_at, MediaAsset.id)
-            .limit(remaining)
-        ).scalars().all()
+        rows = (
+            session.execute(
+                select(MediaAsset)
+                .where(MediaAsset.organisation == org, MediaAsset.created_at < cutoff)
+                .order_by(MediaAsset.created_at, MediaAsset.id)
+                .limit(remaining)
+            )
+            .scalars()
+            .all()
+        )
         for asset in rows:
             plan.scanned += 1
             created = as_utc(asset.created_at)
             if created is None or created >= cutoff:
                 continue
-            jobs = session.execute(
-                select(Job).where(Job.media_id == asset.id).order_by(Job.created_at, Job.id)
-            ).scalars().all()
+            jobs = (
+                session.execute(select(Job).where(Job.media_id == asset.id).order_by(Job.created_at, Job.id))
+                .scalars()
+                .all()
+            )
             job_ids = [job.id for job in jobs]
 
             hold = active_hold_for(session, asset.sha256, job_ids)
@@ -334,9 +342,7 @@ def _plan_objects(session: Session, store: MediaStore, plan: SweepPlan) -> None:
     deleting_jobs = set(plan.job_ids)
     digests = sorted({asset.sha256 for asset in plan.assets})
 
-    wanted_keys = {
-        store.key_for_location(asset.storage_path) for asset in plan.assets
-    }
+    wanted_keys = {store.key_for_location(asset.storage_path) for asset in plan.assets}
     # A key is removable only when no row - in this or any other organisation, past due or not - still
     # names it. `sha256` is indexed, so this is a bounded lookup per digest rather than a table scan.
     live_keys: set[str] = set()
@@ -506,9 +512,7 @@ def sweep_once(
     """Plan, commit and carry out one pass on one connection."""
     settings = settings or get_settings()
     _lock_sweep(session)
-    plan = plan_sweep(
-        session, store, now=now, settings=settings, organisation=organisation, limit=limit
-    )
+    plan = plan_sweep(session, store, now=now, settings=settings, organisation=organisation, limit=limit)
     report = apply_sweep(session, plan, actor=actor, dry_run=dry_run)
     session.commit()
     # Counted at the commit, not at the end. A pass whose rows are gone but whose bytes refused to go has

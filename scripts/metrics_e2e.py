@@ -137,7 +137,7 @@ PATCHES: dict[str, Patch] = {
         "        edges = np.array([float(s.min()), float(np.nextafter(float(s.min()), np.inf))])\n"
         "    else:\n"
         "        edges[-1] = max(float(edges[-1]), float(np.nextafter(edges[-1], np.inf)))\n"
-        "    idx = np.clip(np.searchsorted(edges, s, side=\"right\") - 1, 0, edges.size - 2)\n"
+        '    idx = np.clip(np.searchsorted(edges, s, side="right") - 1, 0, edges.size - 2)\n'
         "    conf = np.maximum(s, 1.0 - s)\n"
         "    correct = ((s >= 0.5) == (y == 1)).astype(float)\n"
         "    total, gap = 0, 0.0\n"
@@ -256,12 +256,8 @@ def shadow_root(mode: str, scratch: Path):
     if root.exists():
         shutil.rmtree(root)
     root.mkdir(parents=True)
-    shutil.copytree(
-        REPO / "synthverify", root / "synthverify", ignore=shutil.ignore_patterns("__pycache__")
-    )
-    shutil.copytree(
-        REPO / "tests", root / "tests", ignore=shutil.ignore_patterns("__pycache__")
-    )
+    shutil.copytree(REPO / "synthverify", root / "synthverify", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(REPO / "tests", root / "tests", ignore=shutil.ignore_patterns("__pycache__"))
     # pytest reads `--strict-markers` and the asyncio mode out of here; without it the child can
     # collect nothing, and a run that collected nothing reads as a pass to anything that only looks
     # at the exit code.
@@ -308,7 +304,8 @@ def run_suite(
         env=env,
         capture_output=True,
         text=True,
-        timeout=600, encoding="utf-8",
+        timeout=600,
+        encoding="utf-8",
     )
     if not junit.exists():
         raise RuntimeError(f"the suite produced no junit:\n{proc.stdout[-3000:]}{proc.stderr[-2000:]}")

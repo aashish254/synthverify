@@ -117,9 +117,7 @@ def metrics_in_expr(expr: str) -> set[str]:
     """Identifiers in a PromQL expression that are not label selectors, ranges, groupings or keywords."""
     stripped = _OFFSET.sub(
         " ",
-        _GROUPING_CLAUSE.sub(
-            " ", _RANGE_SELECTOR.sub("", _LABEL_SELECTOR.sub("", expr or ""))
-        ),
+        _GROUPING_CLAUSE.sub(" ", _RANGE_SELECTOR.sub("", _LABEL_SELECTOR.sub("", expr or ""))),
     )
     return {
         token
@@ -179,7 +177,9 @@ def _check_rule(rule: dict[str, Any], report: RuleReport, seen: set[str]) -> Non
     if not str(rule.get("expr", "")).strip():
         report.issues.append(RuleIssue("shape", f"{where}: no `expr`"))
     if not str(rule.get("for", "")).strip():
-        report.issues.append(RuleIssue("shape", f"{where}: no `for` - an alert without a wait pages on a blip"))
+        report.issues.append(
+            RuleIssue("shape", f"{where}: no `for` - an alert without a wait pages on a blip")
+        )
     annotations = rule.get("annotations") or {}
     for key in ("summary", "description"):
         if not str(annotations.get(key, "")).strip():
@@ -216,9 +216,7 @@ def check_alert_rules(
     path = Path(rules_path) if rules_path else root / DEFAULT_RULES_PATH
     package = root / "synthverify"
     declared = set(HELP_TEXTS) | (scraped_names or set())
-    report = RuleReport(
-        path=str(path), declared=len(HELP_TEXTS), live_scrape=len(scraped_names or ())
-    )
+    report = RuleReport(path=str(path), declared=len(HELP_TEXTS), live_scrape=len(scraped_names or ()))
 
     rules, issues = load_rules(path)
     report.issues.extend(issues)
@@ -244,10 +242,15 @@ def check_alert_rules(
         for name, files in sorted(literals.items()):
             if name not in HELP_TEXTS:
                 report.issues.append(
-                    RuleIssue("undeclared-metric", f"{name} is emitted from {sorted(set(files))[0]} but has no HELP_TEXTS entry")
+                    RuleIssue(
+                        "undeclared-metric",
+                        f"{name} is emitted from {sorted(set(files))[0]} but has no HELP_TEXTS entry",
+                    )
                 )
         for name in sorted(set(HELP_TEXTS) - set(literals)):
             report.issues.append(
-                RuleIssue("dead-declaration", f"HELP_TEXTS declares {name}, which no code in the package names")
+                RuleIssue(
+                    "dead-declaration", f"HELP_TEXTS declares {name}, which no code in the package names"
+                )
             )
     return report

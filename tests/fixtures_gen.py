@@ -77,7 +77,7 @@ def ai_generated_photo(width: int = 512, height: int = 512) -> bytes:
     upsampling-checkerboard modulation, PNG with Stable-Diffusion-style params."""
     x = np.linspace(0, 1, width)
     y = np.linspace(0, 1, height)
-    lum = (np.add.outer(y, x) * 120 + 60)  # perfectly smooth
+    lum = np.add.outer(y, x) * 120 + 60  # perfectly smooth
     arr = np.stack([lum, lum * 0.8, lum * 0.6], axis=2)
     # 4px-period checkerboard: the classic transposed-conv upsampling artifact
     yy, xx = np.mgrid[0:height, 0:width]

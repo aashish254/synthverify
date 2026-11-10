@@ -90,7 +90,11 @@ async def list_jobs(
         session.close()
 
 
-@router.post("/{job_id}/reanalyze", status_code=202, dependencies=[Depends(require_scope("jobs:write")), Depends(rate_limit)])
+@router.post(
+    "/{job_id}/reanalyze",
+    status_code=202,
+    dependencies=[Depends(require_scope("jobs:write")), Depends(rate_limit)],
+)
 def reanalyze(
     request: Request,
     job_id: str,
@@ -141,7 +145,9 @@ async def cancel_job(request: Request, job_id: str):
         # below has to be tracked by the session that commits it.
         job = session.get(Job, job.id)
         if job.status != JobStatus.QUEUED.value:
-            raise HTTPException(status_code=409, detail=f"Job is '{job.status}'; only queued jobs can be cancelled.")
+            raise HTTPException(
+                status_code=409, detail=f"Job is '{job.status}'; only queued jobs can be cancelled."
+            )
         job.status = JobStatus.FAILED.value
         job.error = "cancelled by administrator"
         job.finished_at = None
@@ -189,7 +195,9 @@ def _resolve_artifact_file(job: Job, index: int) -> tuple[Path, dict]:
     return path, entry
 
 
-@router.get("/{job_id}/artifacts", dependencies=[Depends(require_scope("artifacts:read")), Depends(rate_limit)])
+@router.get(
+    "/{job_id}/artifacts", dependencies=[Depends(require_scope("artifacts:read")), Depends(rate_limit)]
+)
 async def list_job_artifacts(request: Request, job_id: str):
     """Forensic artifacts (heatmap images) recorded by a completed job."""
     job = _get_job_or_404(request, job_id)
@@ -206,7 +214,10 @@ async def list_job_artifacts(request: Request, job_id: str):
     }
 
 
-@router.get("/{job_id}/artifacts/{index}", dependencies=[Depends(require_scope("artifacts:read")), Depends(rate_limit)])
+@router.get(
+    "/{job_id}/artifacts/{index}",
+    dependencies=[Depends(require_scope("artifacts:read")), Depends(rate_limit)],
+)
 async def get_job_artifact(request: Request, job_id: str, index: int):
     """Serve one artifact image bytes to an authenticated viewer."""
     job = _get_job_or_404(request, job_id)

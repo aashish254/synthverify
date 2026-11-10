@@ -56,21 +56,21 @@ class Patch:
 PATCHES: dict[str, Patch] = {
     "auc-gate-loosened": Patch(
         file="tests/test_calibration.py",
-        old="assert len(issues) == 3, f\"All three metrics should breach the impossible gates: {issues}\"",
-        new="assert len(issues) == 2, f\"Only two metrics should breach (imprecise gate)\"\n",
+        old='assert len(issues) == 3, f"All three metrics should breach the impossible gates: {issues}"',
+        new='assert len(issues) == 2, f"Only two metrics should breach (imprecise gate)"\n',
         why="an AUC gate loosened to require strict inequality reads as passing when at exactly the threshold, "
-            "erasing the maximum error rate FC-3 promises to enforce",
+        "erasing the maximum error rate FC-3 promises to enforce",
     ),
     "eer-gate-loosened": Patch(
         file="tests/test_calibration.py",
-        old="assert len(issues) == 3, f\"All three metrics should breach the impossible gates: {issues}\"",
-        new="assert len(issues) == 1, f\"Only one metric breaches (EER gate ignored)\"\n",
+        old='assert len(issues) == 3, f"All three metrics should breach the impossible gates: {issues}"',
+        new='assert len(issues) == 1, f"Only one metric breaches (EER gate ignored)"\n',
         why="an EER gate comparison using >= instead of > silently accepts any EER value, erasing the maximum error bound",
     ),
     "ece-gate-loosened": Patch(
         file="tests/test_calibration.py",
-        old="assert len(issues) == 3, f\"All three metrics should breach the impossible gates: {issues}\"",
-        new="assert len(issues) == 0, f\"ECE gate ignored completely (no comparison)\"\n",
+        old='assert len(issues) == 3, f"All three metrics should breach the impossible gates: {issues}"',
+        new='assert len(issues) == 0, f"ECE gate ignored completely (no comparison)"\n',
         why="an ECE gate comparison checking != instead of <= accepts any ECE value, ignoring the calibration bound entirely",
     ),
 }
@@ -82,12 +82,8 @@ def scratch_tree(scratch: Path, mode: str | None) -> Path:
     if root.exists():
         shutil.rmtree(root)
     root.mkdir(parents=True)
-    shutil.copytree(
-        REPO / "synthverify", root / "synthverify", ignore=shutil.ignore_patterns("__pycache__")
-    )
-    shutil.copytree(
-        REPO / "tests", root / "tests", ignore=shutil.ignore_patterns("__pycache__")
-    )
+    shutil.copytree(REPO / "synthverify", root / "synthverify", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(REPO / "tests", root / "tests", ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copy(REPO / "pyproject.toml", root / "pyproject.toml")
 
     if mode:
@@ -133,7 +129,8 @@ def run_suite(
         env=env,
         capture_output=True,
         text=True,
-        timeout=300, encoding="utf-8",
+        timeout=300,
+        encoding="utf-8",
     )
     if not junit.exists():
         raise RuntimeError(f"the suite produced no junit:\n{proc.stdout[-3000:]}{proc.stderr[-2000:]}")

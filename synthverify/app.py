@@ -47,7 +47,9 @@ def _bootstrap_admin_key(db: Database) -> str | None:
     session = db.session()
     try:
         if settings.bootstrap_admin_key:
-            existing = session.query(ApiKey).filter_by(key_hash=hash_key(settings.bootstrap_admin_key)).one_or_none()
+            existing = (
+                session.query(ApiKey).filter_by(key_hash=hash_key(settings.bootstrap_admin_key)).one_or_none()
+            )
             if existing is None:
                 key = ApiKey(
                     key_id="bootstrap",
@@ -75,9 +77,7 @@ def _bootstrap_admin_key(db: Database) -> str | None:
             platform_scope=True,
         )
         session.add(key)
-        AuditLedger(session).append(
-            actor="system:bootstrap", action="key.created", resource="key:bootstrap"
-        )
+        AuditLedger(session).append(actor="system:bootstrap", action="key.created", resource="key:bootstrap")
         session.commit()
         out = PROJECT_ROOT / "data" / "bootstrap_admin_key.txt"
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -164,7 +164,9 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.environment == "production" and [] or ["http://localhost", "http://localhost:8080", "http://127.0.0.1:8080"],
+        allow_origins=settings.environment == "production"
+        and []
+        or ["http://localhost", "http://localhost:8080", "http://127.0.0.1:8080"],
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -229,7 +231,9 @@ def create_app() -> FastAPI:
     @app.exception_handler(UnsupportedMediaError)
     @app.exception_handler(PipelineError)
     async def media_error_handler(request: Request, exc: Exception):
-        return JSONResponse(status_code=422, content={"error": "unsupported_or_invalid_media", "detail": str(exc)})
+        return JSONResponse(
+            status_code=422, content={"error": "unsupported_or_invalid_media", "detail": str(exc)}
+        )
 
     @app.exception_handler(KeyError)
     async def key_error_handler(request: Request, exc: KeyError):

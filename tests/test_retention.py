@@ -59,9 +59,7 @@ ORG_SHARED = "retention-shared"
 
 
 async def _mint(client, organisation: str, name: str, role: str = "analyst") -> str:
-    resp = await client.post(
-        f"{ADMIN}/keys", json={"name": name, "role": role, "organisation": organisation}
-    )
+    resp = await client.post(f"{ADMIN}/keys", json={"name": name, "role": role, "organisation": organisation})
     assert resp.status_code == 201, resp.text
     return resp.json()["key"]
 
@@ -93,9 +91,9 @@ def _backdate(client, asset_id: str, days: int) -> None:
 def _rows(client, organisation: str) -> dict[str, dict]:
     """Every asset row for one organisation: digest, storage path, job ids and artifact names."""
     with _session(client) as session:
-        assets = session.execute(
-            select(MediaAsset).where(MediaAsset.organisation == organisation)
-        ).scalars().all()
+        assets = (
+            session.execute(select(MediaAsset).where(MediaAsset.organisation == organisation)).scalars().all()
+        )
         out: dict[str, dict] = {}
         for asset in assets:
             jobs = session.execute(select(Job).where(Job.media_id == asset.id)).scalars().all()
@@ -114,9 +112,11 @@ def _rows(client, organisation: str) -> dict[str, dict]:
 
 def _ledger(client, action: str) -> list[dict]:
     with _session(client) as session:
-        rows = session.execute(
-            select(AuditEvent).where(AuditEvent.action == action).order_by(AuditEvent.seq)
-        ).scalars().all()
+        rows = (
+            session.execute(select(AuditEvent).where(AuditEvent.action == action).order_by(AuditEvent.seq))
+            .scalars()
+            .all()
+        )
         return [e.to_dict() for e in rows]
 
 
@@ -576,9 +576,7 @@ class TestIdempotent:
         assert len(_rows(client, ORG_DUE)) == 2, "a dry run deleted rows"
 
         real = _sweep(client)
-        assert sorted(real.assets_deleted) == sorted(
-            [seeded["due"]["media_id"], seeded["twin"]["media_id"]]
-        )
+        assert sorted(real.assets_deleted) == sorted([seeded["due"]["media_id"], seeded["twin"]["media_id"]])
         assert _comparable(real.plan) == _comparable(dry.plan), "preview and pass disagreed about the set"
 
     async def test_held_and_deferred_sets_are_stable_across_passes(self, client):
@@ -797,9 +795,7 @@ class TestScheduler:
         # fixed time and hoping the failures landed inside it, which made it fail roughly one run in five.
         monkeypatch.setenv("SV_RETENTION_SWEEP_INTERVAL_SECONDS", "1")
         get_settings.cache_clear()
-        before = _counter(
-            (await client.get("/metrics")).text, "synthverify_retention_sweep_errors_total"
-        )
+        before = _counter((await client.get("/metrics")).text, "synthverify_retention_sweep_errors_total")
         fleet = _fleet(client)
         try:
             assert fleet._settings.retention_sweep_interval_seconds == 1.0
@@ -831,9 +827,7 @@ class TestApiSurface:
         assert body["items"] == []
         assert body["default_days"] is None
 
-        await client.put(
-            f"{ADMIN}/retention/policies/{ORG_DUE}", json={"media_ttl_days": 45, "note": "n"}
-        )
+        await client.put(f"{ADMIN}/retention/policies/{ORG_DUE}", json={"media_ttl_days": 45, "note": "n"})
         body = (await client.get(f"{ADMIN}/retention/policies")).json()
         assert [i["organisation"] for i in body["items"]] == [ORG_DUE]
         assert body["items"][0]["note"] == "n"
@@ -979,7 +973,8 @@ class TestCli:
             text=True,
             cwd=str(PROJECT),
             env=env,
-            timeout=180, encoding="utf-8",
+            timeout=180,
+            encoding="utf-8",
         )
 
     async def test_the_preview_is_the_default_and_apply_is_the_opt_in(self, client):
@@ -998,9 +993,7 @@ class TestCli:
         assert preview.returncode == 0, preview.stderr
         report = json.loads(preview.stdout)
         assert report["dry_run"] is True
-        assert sorted(report["asset_ids"]) == sorted(
-            [seeded["due"]["media_id"], seeded["twin"]["media_id"]]
-        )
+        assert sorted(report["asset_ids"]) == sorted([seeded["due"]["media_id"], seeded["twin"]["media_id"]])
         assert len(_rows(client, ORG_DUE)) == 2, "the CLI deleted without --apply"
 
         applied = self._run(["retention-sweep", "--apply", "--organisation", ORG_DUE], env)

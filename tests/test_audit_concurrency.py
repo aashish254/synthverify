@@ -152,7 +152,9 @@ def _pre_fix_sqlite_engine(url: str):
     deferred ``BEGIN`` takes no lock for the head read, so the write upgrade happens after two
     connections have already agreed on the same parent.
     """
-    engine = sa.create_engine(url, pool_pre_ping=True, connect_args={"check_same_thread": False, "timeout": 30})
+    engine = sa.create_engine(
+        url, pool_pre_ping=True, connect_args={"check_same_thread": False, "timeout": 30}
+    )
 
     @event.listens_for(engine, "connect")
     def _pragmas(dbapi_conn, _record):  # noqa: N802

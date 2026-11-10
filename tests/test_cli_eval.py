@@ -44,25 +44,38 @@ def paths(tmp_path: Path) -> dict[str, str]:
 
 def scan_args(root: Path, out: dict[str, str], dataset: str = "fixture") -> list[str]:
     return [
-        "--scan-dir", str(root),
-        "--dataset", dataset,
-        "--generator", "sdxl",
-        "--real-dir", "photos",
-        "--manifest", out["manifest"],
-        "--split-file", out["split-file"],
-        "--table", out["table"],
-        "--detectors", "metadata",
+        "--scan-dir",
+        str(root),
+        "--dataset",
+        dataset,
+        "--generator",
+        "sdxl",
+        "--real-dir",
+        "photos",
+        "--manifest",
+        out["manifest"],
+        "--split-file",
+        out["split-file"],
+        "--table",
+        out["table"],
+        "--detectors",
+        "metadata",
     ]
 
 
 def read_args(out: dict[str, str], root: Path) -> list[str]:
     """The same run, expressed as a resume: the artefacts on disk instead of a re-scan."""
     return [
-        "--manifest", out["manifest"],
-        "--split-file", out["split-file"],
-        "--root", str(root),
-        "--table", out["table"],
-        "--detectors", "metadata",
+        "--manifest",
+        out["manifest"],
+        "--split-file",
+        out["split-file"],
+        "--root",
+        str(root),
+        "--table",
+        out["table"],
+        "--detectors",
+        "metadata",
     ]
 
 
@@ -77,9 +90,7 @@ def split_rows(path: str | Path, split: str | None = None) -> list[dict]:
     deterministic -- but determinism is not the same as relevance. A test that repeated today's cell
     sizes would pass on a wrong filter and fail the moment the fixture grows, which is backwards.
     """
-    rows = [
-        json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()
-    ]
+    rows = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
     body = [r for r in rows if "split" in r]
     return body if split is None else [r for r in body if r["split"] == split]
 
@@ -236,18 +247,21 @@ def test_a_refusal_names_the_count_that_failed_not_the_cells_total(tmp_path, cap
     out = paths(tmp_path)
     assert cli_main(["score", *scan_args(root, out)]) == 0
     capsys.readouterr()
-    assert cli_main(
-        [
-            "eval",
-            "--table",
-            out["table"],
-            "--split-file",
-            out["split-file"],
-            "--split",
-            "train,calibration,validation,held_out_test",
-            "--by-generator",
-        ]
-    ) == 1
+    assert (
+        cli_main(
+            [
+                "eval",
+                "--table",
+                out["table"],
+                "--split-file",
+                out["split-file"],
+                "--split",
+                "train,calibration,validation,held_out_test",
+                "--by-generator",
+            ]
+        )
+        == 1
+    )
     printed = capsys.readouterr().out
     assert "pos/neg=20/20" in printed, printed
     assert "refused: n=40" not in printed, "the cell's total is not the count that failed"
@@ -319,9 +333,7 @@ def test_a_split_filter_scores_exactly_the_cell_the_assignment_names(tmp_path, c
     out = paths(tmp_path)
     assert cli_main(["score", *scan_args(root, out)]) == 0
     full = capsys.readouterr().out
-    sizes = dict(
-        cell.split("=") for cell in full.split("split sizes  : ")[1].splitlines()[0].split(", ")
-    )
+    sizes = dict(cell.split("=") for cell in full.split("split sizes  : ")[1].splitlines()[0].split(", "))
     train = int(sizes["train"])
     assert train and train < 6, "the fixture has to be split across more than one cell to mean anything"
 
@@ -384,9 +396,21 @@ def test_naming_a_split_moves_which_rows_are_measured_not_only_what_they_are_cal
     assert sizes["train"] != sizes["held_out_test"]
 
     for split in ("train", "held_out_test"):
-        assert cli_main(
-            ["eval", "--table", out["table"], "--split-file", out["split-file"], "--split", split, "--dry-run"]
-        ) == 0
+        assert (
+            cli_main(
+                [
+                    "eval",
+                    "--table",
+                    out["table"],
+                    "--split-file",
+                    out["split-file"],
+                    "--split",
+                    split,
+                    "--dry-run",
+                ]
+            )
+            == 0
+        )
         printed = capsys.readouterr().out
         assert f"{sizes[split]} ran row(s)" in printed, (split, printed)
 
@@ -400,18 +424,21 @@ def test_a_selection_spanning_two_splits_reads_the_sum_and_names_both(tmp_path, 
     cli_main(["score", *scan_args(root, out)])
     capsys.readouterr()
     want = split_sizes(out["split-file"])["train"] + split_sizes(out["split-file"])["held_out_test"]
-    assert cli_main(
-        [
-            "eval",
-            "--table",
-            out["table"],
-            "--split-file",
-            out["split-file"],
-            "--split",
-            "train,held_out_test",
-            "--dry-run",
-        ]
-    ) == 0
+    assert (
+        cli_main(
+            [
+                "eval",
+                "--table",
+                out["table"],
+                "--split-file",
+                out["split-file"],
+                "--split",
+                "train,held_out_test",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
     printed = capsys.readouterr().out
     assert "split    : train, held_out_test ->" in printed
     assert f"{want} ran row(s)" in printed and f"{6 - want} row(s) in other splits" in printed
@@ -433,9 +460,10 @@ def test_a_truth_cell_edited_in_the_table_is_refused_against_the_split_file(tmp_
     assert text.count(before) == 1
     Path(out["table"]).write_text(text.replace(before, after, 1), encoding="utf-8")
 
-    assert cli_main(
-        ["eval", "--table", out["table"], "--split-file", out["split-file"], "--split", "train"]
-    ) == 2
+    assert (
+        cli_main(["eval", "--table", out["table"], "--split-file", out["split-file"], "--split", "train"])
+        == 2
+    )
     captured = capsys.readouterr()
     assert "1 row(s) contradict the split file" in captured.err
     assert f"table says {victim['generator']}/truth={1 - victim['truth']}" in captured.err
@@ -475,9 +503,10 @@ def test_an_unknown_split_name_is_a_message_not_a_traceback(tmp_path, capsys):
     out = paths(tmp_path)
     cli_main(["score", *scan_args(root, out)])
     capsys.readouterr()
-    assert cli_main(
-        ["eval", "--table", out["table"], "--split-file", out["split-file"], "--split", "heldout"]
-    ) == 2
+    assert (
+        cli_main(["eval", "--table", out["table"], "--split-file", out["split-file"], "--split", "heldout"])
+        == 2
+    )
     captured = capsys.readouterr()
     assert "unknown split(s): heldout" in captured.err
     assert "Traceback" not in captured.err and "Traceback" not in captured.out
@@ -497,9 +526,12 @@ def test_a_selection_with_no_scored_row_underneath_it_is_refused_with_the_sizes(
     sizes = split_sizes(out["split-file"])
 
     for split in ("calibration", "validation"):
-        assert cli_main(
-            ["eval", "--table", single["table"], "--split-file", out["split-file"], "--split", split]
-        ) == 2
+        assert (
+            cli_main(
+                ["eval", "--table", single["table"], "--split-file", out["split-file"], "--split", split]
+            )
+            == 2
+        )
         err = capsys.readouterr().err
         assert f"no row in {single['table']} belongs to {split}" in err
         assert all(f"{k}={v}" in err for k, v in sizes.items()), err
@@ -520,18 +552,21 @@ def test_a_selection_that_leaves_one_class_is_refused_with_its_reason_not_a_numb
         "this cell is the fixture's single-class case; if the partition stops producing one, this "
         "test's premise has to be restated rather than its assertion relaxed"
     )
-    assert cli_main(
-        [
-            "eval",
-            "--table",
-            out["table"],
-            "--split-file",
-            out["split-file"],
-            "--split",
-            "calibration",
-            "--allow-thin",
-        ]
-    ) == 1
+    assert (
+        cli_main(
+            [
+                "eval",
+                "--table",
+                out["table"],
+                "--split-file",
+                out["split-file"],
+                "--split",
+                "calibration",
+                "--allow-thin",
+            ]
+        )
+        == 1
+    )
     printed = capsys.readouterr().out
     assert f"rows     : {len(calibration)} over {len(calibration)} sample(s)" in printed
     assert "refused: AUC is undefined with only one class present" in printed
@@ -548,19 +583,22 @@ def test_the_json_report_carries_the_split_it_measured_and_the_file_that_defined
     capsys.readouterr()
     sizes = split_sizes(out["split-file"])
     kept = sizes["train"] + sizes["held_out_test"]
-    assert cli_main(
-        [
-            "eval",
-            "--table",
-            out["table"],
-            "--split-file",
-            out["split-file"],
-            "--split",
-            "train,held_out_test",
-            "--allow-thin",
-            "--json",
-        ]
-    ) == 0
+    assert (
+        cli_main(
+            [
+                "eval",
+                "--table",
+                out["table"],
+                "--split-file",
+                out["split-file"],
+                "--split",
+                "train,held_out_test",
+                "--allow-thin",
+                "--json",
+            ]
+        )
+        == 0
+    )
     printed = capsys.readouterr().out
     payload = json.loads(printed[printed.index("{") :])
     # The payload names the file that defined the split exactly as it was passed on the command

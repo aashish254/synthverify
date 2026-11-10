@@ -89,9 +89,7 @@ def test_a_single_class_corpus_is_refused_because_auc_on_it_is_undefined(tmp_pat
 def test_a_declared_generator_directory_that_is_not_there_is_an_error_not_a_skip(tmp_path):
     root = corpus_root(tmp_path)
     with pytest.raises(CorpusError, match="declared generator directory 'midjourney'"):
-        scan_by_generator(
-            root, dataset="d", fake_generators={"sdxl": "sdxl", "midjourney": "midjourney"}
-        )
+        scan_by_generator(root, dataset="d", fake_generators={"sdxl": "sdxl", "midjourney": "midjourney"})
 
 
 def test_a_declared_directory_holding_no_images_is_refused(tmp_path):
@@ -196,7 +194,10 @@ def test_a_token_rule_that_would_label_a_file_both_ways_is_refused(tmp_path):
 def test_a_scanned_corpus_round_trips_through_a_manifest(tmp_path):
     root = corpus_root(tmp_path)
     found = scan_by_generator(
-        root, dataset="community_forensics", fake_generators={"sdxl": "sdxl", "flux": "flux"}, real_directory="photos"
+        root,
+        dataset="community_forensics",
+        fake_generators={"sdxl": "sdxl", "flux": "flux"},
+        real_directory="photos",
     )
     path = write_manifest(found, tmp_path / "m" / "corpus.csv", root=root)
     read_back = read_manifest(path, root=root)
@@ -209,7 +210,9 @@ def test_a_scanned_corpus_round_trips_through_a_manifest(tmp_path):
 def test_a_manifest_written_against_one_root_can_be_read_against_another(tmp_path):
     root = corpus_root(tmp_path)
     manifest = write_manifest(
-        scan_by_generator(root, dataset="d", fake_generators={"sdxl": "sdxl", "flux": "flux"}, real_directory="photos"),
+        scan_by_generator(
+            root, dataset="d", fake_generators={"sdxl": "sdxl", "flux": "flux"}, real_directory="photos"
+        ),
         tmp_path / "corpus.csv",
         root=root,
     )
@@ -235,7 +238,9 @@ def test_the_manifest_digest_tracks_the_rows_and_not_the_write_order(tmp_path):
     b = write_manifest(list(reversed(scanned)), tmp_path / "b.csv", root=root)
     assert manifest_digest(a) == manifest_digest(b)
     wider = write_manifest(
-        scanned + scan_flat(root / "flux", dataset="d", generator="flux", truth=1), tmp_path / "c.csv", root=root
+        scanned + scan_flat(root / "flux", dataset="d", generator="flux", truth=1),
+        tmp_path / "c.csv",
+        root=root,
     )
     assert manifest_digest(a) != manifest_digest(wider)
 
@@ -245,7 +250,9 @@ def test_a_manifest_whose_file_list_no_longer_resolves_is_refused(tmp_path):
     # skipped the missing rows would score 9,800 images and report n = 10,000.
     root = corpus_root(tmp_path)
     manifest = write_manifest(
-        scan_by_generator(root, dataset="d", fake_generators={"sdxl": "sdxl", "flux": "flux"}, real_directory="photos"),
+        scan_by_generator(
+            root, dataset="d", fake_generators={"sdxl": "sdxl", "flux": "flux"}, real_directory="photos"
+        ),
         tmp_path / "corpus.csv",
         root=root,
     )
@@ -264,7 +271,10 @@ def test_a_manifest_whose_file_list_no_longer_resolves_is_refused(tmp_path):
         (manifest_text([["a", "d", "g"]]), "is missing truth, path"),
         (manifest_text([["a", "d", "g", "2", "a.png"]]), "expected 0 or 1"),
         (manifest_text([["a", "d", "g", "one", "a.png"]]), "has truth 'one'"),
-        (manifest_text([["a", "d", "g", "1", "sdxl/a.png"], ["a", "d", "g", "1", "sdxl/a.png"]]), "repeats sample id"),
+        (
+            manifest_text([["a", "d", "g", "1", "sdxl/a.png"], ["a", "d", "g", "1", "sdxl/a.png"]]),
+            "repeats sample id",
+        ),
     ],
 )
 def test_a_manifest_that_does_not_say_what_it_appears_to_is_refused(tmp_path, text, message):
@@ -286,8 +296,10 @@ def test_an_absolute_path_in_a_manifest_is_honoured_rather_than_joined(tmp_path)
     only = scan_flat(root / "sdxl", dataset="d", generator="sdxl", truth=1) + scan_flat(
         root / "photos", dataset="d", generator="real", truth=0
     )
-    absolute = ",".join(MANIFEST_COLUMNS) + "\n" + "\n".join(
-        f"{s.sample_id},d,{s.generator},{s.truth},{s.path}" for s in only
+    absolute = (
+        ",".join(MANIFEST_COLUMNS)
+        + "\n"
+        + "\n".join(f"{s.sample_id},d,{s.generator},{s.truth},{s.path}" for s in only)
     )
     path = tmp_path / "abs.csv"
     path.write_text(absolute + "\n", encoding="utf-8")

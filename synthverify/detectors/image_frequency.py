@@ -89,11 +89,7 @@ class FrequencyDetector(Detector):
         hf_mean = float(log_power[band_mask].mean()) if band_mask.any() else 0.0
         checker_excess = checker_energy - hf_mean
 
-        score = clamp01(
-            0.03 * max(0.0, max_dev - 10.0)
-            + 0.05 * n_spikes
-            + 0.14 * max(0.0, checker_excess)
-        )
+        score = clamp01(0.03 * max(0.0, max_dev - 10.0) + 0.05 * n_spikes + 0.14 * max(0.0, checker_excess))
         confidence = 0.55 if n_spikes or checker_excess > 0.5 else 0.4
 
         findings = [
@@ -137,6 +133,7 @@ class FrequencyDetector(Detector):
 
 def _checkerboard_mask(fy: np.ndarray, fx: np.ndarray) -> np.ndarray:
     """Frequencies where both axes sit on odd multiples of the quarter band."""
+
     def odd_band(f: np.ndarray) -> np.ndarray:
         scaled = np.abs(f) * 4  # 0..2
         return (np.abs(scaled - np.round(scaled)) < 0.08) & (np.round(scaled) % 2 == 1)

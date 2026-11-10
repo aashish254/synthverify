@@ -112,9 +112,7 @@ def _sqlite_master(url: str) -> dict[str, tuple[str, str]]:
     try:
         with engine.connect() as conn:
             rows = conn.execute(
-                sa.text(
-                    "select name, type, sql from sqlite_master where sql is not null order by name"
-                )
+                sa.text("select name, type, sql from sqlite_master where sql is not null order by name")
             ).all()
     finally:
         engine.dispose()
@@ -165,7 +163,7 @@ def _simulate_a_v1_jobs_row(url: str) -> None:
                 " VALUES ('job-1','media-1','completed',5,1,'default','2026-01-01 00:00:00')"
             )
         )
-        conn.execute(sa.text('UPDATE jobs SET "LOW"=\'HIGH\' WHERE id=\'job-1\''))
+        conn.execute(sa.text("UPDATE jobs SET \"LOW\"='HIGH' WHERE id='job-1'"))
     engine.dispose()
 
 
@@ -308,7 +306,8 @@ class TestDeployEntryPoint:
             text=True,
             cwd=str(Path(os.sep)),
             env={**os.environ, "PYTHONPATH": str(PROJECT)},
-            timeout=120, encoding="utf-8",
+            timeout=120,
+            encoding="utf-8",
         )
 
     def test_cli_creates_the_schema_from_an_unrelated_directory(self, tmp_path):

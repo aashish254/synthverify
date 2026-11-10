@@ -248,9 +248,7 @@ class TestPipelineOffline:
         from synthverify.db import Job, MediaAsset
         from synthverify.worker import process_job
 
-        resp = await no_worker_client.post(
-            f"{API}/media/ingest", files={"file": ("d.jpg", doctored_photo())}
-        )
+        resp = await no_worker_client.post(f"{API}/media/ingest", files={"file": ("d.jpg", doctored_photo())})
         assert resp.status_code == 202
         job_id = resp.json()["job_id"]
 
@@ -294,7 +292,6 @@ class TestPipelineOffline:
         assert endpoints == []
         assert deliveries == []
 
-
     async def test_shared_limiter_degrades_when_the_reach_is_blocked(self, client, monkeypatch):
         """AC-INFRA-3(b) in AC-FC-4's costume: the shared bucket is selected, and the air-gap blocks
         the reach instead of a firewall refusing it.
@@ -330,7 +327,9 @@ class TestPipelineOffline:
             # One reach, not two: the guard fires at name resolution (this client resolves before it
             # connects, so no DNS query leaves either), and the cooldown keeps the second request
             # from paying for the same outage again.
-            assert attempts == ["getaddrinfo(valkey.internal:6379)"], f"expected one blocked reach, saw {attempts}"
+            assert attempts == ["getaddrinfo(valkey.internal:6379)"], (
+                f"expected one blocked reach, saw {attempts}"
+            )
             assert limiter.degraded is True
             assert limiter.last_error
             body = await wait_for_job(client, resp.json()["job_id"])
@@ -358,7 +357,8 @@ class TestCLIAndAuditOffline:
             text=True,
             cwd=str(PROJECT),
             env=merged,
-            timeout=180, encoding="utf-8",
+            timeout=180,
+            encoding="utf-8",
         )
 
     def test_cli_analyze_succeeds_with_no_network(self, tmp_path):
@@ -368,9 +368,7 @@ class TestCLIAndAuditOffline:
         assert json.loads(result.stdout)["verdict"]["recommended_action"] == "BLOCK"
 
     def test_audit_chain_verifies_offline(self, database_env):
-        created = self._guarded_run(
-            "create-key", "--name", "offline", "--role", "service", env=database_env
-        )
+        created = self._guarded_run("create-key", "--name", "offline", "--role", "service", env=database_env)
         assert created.returncode == 0, created.stderr
         verified = self._guarded_run("audit-verify", env=database_env)
         assert verified.returncode == 0, verified.stderr

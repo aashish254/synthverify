@@ -36,7 +36,9 @@ class VideoTemporalDetector(Detector):
         vid = ctx.video
         frames = vid.frames
         if len(frames) < 4:
-            return self.skipped(self, ctx, f"Only {len(frames)} frame(s) decoded - temporal analysis needs >= 4.")
+            return self.skipped(
+                self, ctx, f"Only {len(frames)} frame(s) decoded - temporal analysis needs >= 4."
+            )
 
         sigs = np.stack([frame_signature(f) for f in frames])  # (N, 8, 8)
         luma = sigs.mean(axis=(1, 2)) * 255.0

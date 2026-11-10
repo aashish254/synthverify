@@ -1,10 +1,10 @@
 """Official Python SDK client for the SynthVerify API.
 
-    from synthverify.client import SynthVerifyClient
+from synthverify.client import SynthVerifyClient
 
-    sv = SynthVerifyClient("http://localhost:8080", api_key="sv_live_...")
-    report = sv.verify_and_wait("invoice_scan.jpg")      # ingest + poll + report
-    print(report["verdict"]["recommended_action"])
+sv = SynthVerifyClient("http://localhost:8080", api_key="sv_live_...")
+report = sv.verify_and_wait("invoice_scan.jpg")      # ingest + poll + report
+print(report["verdict"]["recommended_action"])
 """
 
 from __future__ import annotations
@@ -49,7 +49,9 @@ class SynthVerifyClient:
                 detail = payload.get("detail") or payload.get("error") or resp.text
             except Exception:  # noqa: BLE001
                 payload, detail = None, resp.text
-            raise SynthVerifyError(f"{method} {path} -> {resp.status_code}: {detail}", resp.status_code, payload)
+            raise SynthVerifyError(
+                f"{method} {path} -> {resp.status_code}: {detail}", resp.status_code, payload
+            )
         return resp
 
     # ---------------------------------------------------------------- meta
@@ -102,7 +104,9 @@ class SynthVerifyClient:
         return resp.json()["job_id"]
 
     def get_job(self, job_id: str, include_report: bool = True) -> dict:
-        return self._request("GET", f"/api/v1/jobs/{job_id}", params={"include_report": include_report}).json()
+        return self._request(
+            "GET", f"/api/v1/jobs/{job_id}", params={"include_report": include_report}
+        ).json()
 
     def wait_for_job(self, job_id: str, timeout: float = 300.0) -> dict:
         """Poll until the job completes; raises SynthVerifyError on failure."""

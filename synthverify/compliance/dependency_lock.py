@@ -156,7 +156,7 @@ class LockReport:
 
     pins: dict[str, Pin] = field(default_factory=dict)
     closure: dict[str, str] = field(default_factory=dict)  # key -> installed version
-    groups: dict[str, int] = field(default_factory=dict)   # declared group -> requirement count
+    groups: dict[str, int] = field(default_factory=dict)  # declared group -> requirement count
     issues: list[LockIssue] = field(default_factory=list)
     # Pins this host does not install, and the metadata line that says why: `{pin: evidence}`.
     # Only the exemptions this run actually used, so the report cannot grow with every
@@ -211,10 +211,7 @@ class LockReport:
             lines.append(f"  inert on this platform, pinned anyway: {pin} - {evidence}")
         for issue in self.issues:
             lines.append(f"  {issue.kind.upper():<9} {issue.detail}")
-        lines.append(
-            "  RESULT: "
-            + ("PASS" if self.ok else f"FAIL ({len(self.issues)} problem(s))")
-        )
+        lines.append("  RESULT: " + ("PASS" if self.ok else f"FAIL ({len(self.issues)} problem(s))"))
         return "\n".join(lines)
 
 
@@ -279,18 +276,14 @@ def read_lock(path: Path | str = LOCK_PATH) -> tuple[dict[str, Pin], list[LockIs
         if not line or line.startswith("#"):
             continue
         if "==" not in line or any(op in line for op in ("<=", ">=", "!=", ">", "<", ";", " ")):
-            issues.append(
-                LockIssue("unpinned", f"{lock}:{number} is not a `name==version` pin: {raw!r}")
-            )
+            issues.append(LockIssue("unpinned", f"{lock}:{number} is not a `name==version` pin: {raw!r}"))
             continue
         name, _, version = line.partition("==")
         pin = Pin(name.strip(), version.strip())
         if pin.key in pins:
             issues.append(LockIssue("duplicate", f"{lock}:{number} pins {pin.name} twice"))
         if not pin.version:
-            issues.append(
-                LockIssue("unpinned", f"{lock}:{number} pins {pin.name} to nothing: {raw!r}")
-            )
+            issues.append(LockIssue("unpinned", f"{lock}:{number} pins {pin.name} to nothing: {raw!r}"))
         pins[pin.key] = pin
     return pins, issues
 
@@ -314,9 +307,7 @@ def check_lock(project_root: Path | str = ".", lock_path: Path | str = LOCK_PATH
         name = pin.name if pin else key
         if pin is None:
             where = f"installed at {version}" if version else "declared but not installed here"
-            issues.append(
-                LockIssue("unpinned", f"{key} is in the closure ({where}) and has no lock entry")
-            )
+            issues.append(LockIssue("unpinned", f"{key} is in the closure ({where}) and has no lock entry"))
         elif not version:
             issues.append(
                 LockIssue(
@@ -356,9 +347,7 @@ def check_lock(project_root: Path | str = ".", lock_path: Path | str = LOCK_PATH
             exempted[str(pin)] = inert[key]
             continue
         hint = " (a base-image tool, not a dependency)" if pin.name.lower() in NOT_A_DEPENDENCY else ""
-        issues.append(
-            LockIssue("stale", f"{pin} is in the lock and nothing declares it{hint}")
-        )
+        issues.append(LockIssue("stale", f"{pin} is in the lock and nothing declares it{hint}"))
     for name, (version, reason) in sorted(PLATFORM_PINS.items()):
         platform_pin = parse_requirement(name)
         assert platform_pin is not None  # every PLATFORM_PINS key is a literal, valid name

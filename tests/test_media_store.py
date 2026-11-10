@@ -170,8 +170,10 @@ class _Handler(BaseHTTPRequestHandler):
             return self._reject("InvalidCredential", claimed, 400)
         access_key, date_stamp, region, service, terminator = pieces
         claimed |= {
-            "access_key": access_key, "scope": "/".join(pieces[1:]),
-            "signed_headers": signed_headers, "credential_region": region,
+            "access_key": access_key,
+            "scope": "/".join(pieces[1:]),
+            "signed_headers": signed_headers,
+            "credential_region": region,
             "credential_service": service,
         }
         if claimed["payload_hash"] != hashlib.sha256(body).hexdigest():
@@ -186,7 +188,9 @@ class _Handler(BaseHTTPRequestHandler):
         )
         string_to_sign = "\n".join(
             [
-                "AWS4-HMAC-SHA256", claimed["amz_date"], claimed["scope"],
+                "AWS4-HMAC-SHA256",
+                claimed["amz_date"],
+                claimed["scope"],
                 hashlib.sha256(canonical.encode()).hexdigest(),
             ]
         )
@@ -224,7 +228,7 @@ class _Handler(BaseHTTPRequestHandler):
 
 def _parse_auth(auth: str) -> tuple[str, str, str]:
     fields = {}
-    for piece in auth[len("AWS4-HMAC-SHA256 "):].split(","):
+    for piece in auth[len("AWS4-HMAC-SHA256 ") :].split(","):
         name, _, value = piece.strip().partition("=")
         fields[name] = value
     return fields.get("Credential", ""), fields.get("SignedHeaders", ""), fields.get("Signature", "")
@@ -295,8 +299,12 @@ def mock_s3() -> MockS3:
 @pytest.fixture()
 def s3_store(mock_s3) -> S3MediaStore:
     return S3MediaStore(
-        endpoint=mock_s3.url, bucket=BUCKET, region=REGION,
-        access_key=ACCESS_KEY, secret_key=SECRET_KEY, prefix="media",
+        endpoint=mock_s3.url,
+        bucket=BUCKET,
+        region=REGION,
+        access_key=ACCESS_KEY,
+        secret_key=SECRET_KEY,
+        prefix="media",
     )
 
 
@@ -376,7 +384,9 @@ class TestLocal:
         import os as os_module
 
         store = local_at(tmp_path)
-        monkeypatch.setattr(os_module, "replace", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("full")))
+        monkeypatch.setattr(
+            os_module, "replace", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("full"))
+        )
         with pytest.raises(OSError, match="full"):
             store.put(DIGEST_A, "a.jpg", b"payload")
         assert not store.exists(store.location(content_key(DIGEST_A, "a.jpg")))
@@ -420,8 +430,11 @@ class TestSigV4:
 
     def test_a_wrong_secret_is_rejected_as_a_signature_mismatch(self, mock_s3):
         store = S3MediaStore(
-            endpoint=mock_s3.url, bucket=BUCKET, region=REGION,
-            access_key=ACCESS_KEY, secret_key="not the secret",
+            endpoint=mock_s3.url,
+            bucket=BUCKET,
+            region=REGION,
+            access_key=ACCESS_KEY,
+            secret_key="not the secret",
         )
         with pytest.raises(MediaStoreError, match="SignatureDoesNotMatch"):
             store.put(DIGEST_A, "a.jpg", b"x")
@@ -429,8 +442,11 @@ class TestSigV4:
 
     def test_a_wrong_region_breaks_the_credential_scope(self, mock_s3):
         store = S3MediaStore(
-            endpoint=mock_s3.url, bucket=BUCKET, region="eu-west-1",
-            access_key=ACCESS_KEY, secret_key=SECRET_KEY,
+            endpoint=mock_s3.url,
+            bucket=BUCKET,
+            region="eu-west-1",
+            access_key=ACCESS_KEY,
+            secret_key=SECRET_KEY,
         )
         with pytest.raises(MediaStoreError, match="CredentialScopeMismatch"):
             store.put(DIGEST_A, "a.jpg", b"x")
@@ -456,8 +472,12 @@ class TestSigV4:
         }.items():
             wire = _RecordingTransport()
             store = S3MediaStore(
-                endpoint=f"https://s3.{REGION}.amazonaws.com", bucket=BUCKET, region=REGION,
-                access_key=ACCESS_KEY, secret_key=SECRET_KEY, path_style=path_style,
+                endpoint=f"https://s3.{REGION}.amazonaws.com",
+                bucket=BUCKET,
+                region=REGION,
+                access_key=ACCESS_KEY,
+                secret_key=SECRET_KEY,
+                path_style=path_style,
                 transport=wire,
             )
             store.put(DIGEST_A, "a.jpg", b"payload bytes")
@@ -467,8 +487,12 @@ class TestSigV4:
             # ...and the verifier is not a rubber stamp: a re-sent request with a
             # different body must no longer verify.
             tampered = httpx.Request(
-                request.method, request.url,
-                headers={**dict(request.headers), "x-amz-content-sha256": hashlib.sha256(b"other").hexdigest()},
+                request.method,
+                request.url,
+                headers={
+                    **dict(request.headers),
+                    "x-amz-content-sha256": hashlib.sha256(b"other").hexdigest(),
+                },
                 content=b"other",
             )
             assert not _signature_is_valid(tampered)
@@ -508,8 +532,12 @@ class TestS3Behaviour:
     def test_an_unreachable_endpoint_becomes_one_typed_error(self, mock_s3):
         """The endpoint going away mid-run must not leak httpx into an API response."""
         store = S3MediaStore(
-            endpoint="http://127.0.0.1:1", bucket=BUCKET, region=REGION,
-            access_key=ACCESS_KEY, secret_key=SECRET_KEY, timeout=2.0,
+            endpoint="http://127.0.0.1:1",
+            bucket=BUCKET,
+            region=REGION,
+            access_key=ACCESS_KEY,
+            secret_key=SECRET_KEY,
+            timeout=2.0,
         )
         with pytest.raises(MediaStoreError, match="could not reach the media endpoint"):
             store.get(f"s3://{BUCKET}/aa/x.jpg")
@@ -543,8 +571,12 @@ class TestFactory:
     def test_s3_is_selected_by_config_alone(self, monkeypatch, tmp_path):
         settings = self._settings(
             monkeypatch,
-            SV_MEDIA_STORE="s3", SV_S3_ENDPOINT="http://minio:9000", SV_S3_BUCKET="evidence",
-            SV_S3_ACCESS_KEY="a", SV_S3_SECRET_KEY="b", SV_S3_PREFIX="media",
+            SV_MEDIA_STORE="s3",
+            SV_S3_ENDPOINT="http://minio:9000",
+            SV_S3_BUCKET="evidence",
+            SV_S3_ACCESS_KEY="a",
+            SV_S3_SECRET_KEY="b",
+            SV_S3_PREFIX="media",
         )
         store = get_media_store(settings)
         assert isinstance(store, S3MediaStore)
@@ -568,13 +600,21 @@ class TestFactory:
 
     def test_endpoint_and_bucket_change_the_cached_instance(self, monkeypatch, tmp_path):
         first = self._settings(
-            monkeypatch, SV_MEDIA_STORE="s3", SV_S3_ENDPOINT="http://a:9000",
-            SV_S3_BUCKET="one", SV_S3_ACCESS_KEY="k", SV_S3_SECRET_KEY="s",
+            monkeypatch,
+            SV_MEDIA_STORE="s3",
+            SV_S3_ENDPOINT="http://a:9000",
+            SV_S3_BUCKET="one",
+            SV_S3_ACCESS_KEY="k",
+            SV_S3_SECRET_KEY="s",
         )
         assert get_media_store(first).bucket == "one"
         second = self._settings(
-            monkeypatch, SV_MEDIA_STORE="s3", SV_S3_ENDPOINT="http://a:9000",
-            SV_S3_BUCKET="two", SV_S3_ACCESS_KEY="k", SV_S3_SECRET_KEY="s",
+            monkeypatch,
+            SV_MEDIA_STORE="s3",
+            SV_S3_ENDPOINT="http://a:9000",
+            SV_S3_BUCKET="two",
+            SV_S3_ACCESS_KEY="k",
+            SV_S3_SECRET_KEY="s",
         )
         assert get_media_store(second).bucket == "two"
 
@@ -588,8 +628,11 @@ def parity_store(request, tmp_path, mock_s3) -> MediaStore:
     if request.param == "local":
         return LocalMediaStore(tmp_path / "media")
     return S3MediaStore(
-        endpoint=mock_s3.url, bucket=BUCKET, region=REGION,
-        access_key=ACCESS_KEY, secret_key=SECRET_KEY,
+        endpoint=mock_s3.url,
+        bucket=BUCKET,
+        region=REGION,
+        access_key=ACCESS_KEY,
+        secret_key=SECRET_KEY,
     )
 
 
@@ -714,9 +757,7 @@ class TestIngestThroughTheStore:
         from synthverify.app import app
         from synthverify.db import MediaAsset
 
-        response = await client.post(
-            f"{API}/media/ingest", files={"file": ("scene.jpg", natural_photo())}
-        )
+        response = await client.post(f"{API}/media/ingest", files={"file": ("scene.jpg", natural_photo())})
         assert response.status_code == 202
         job = await wait_for_job(client, response.json()["job_id"])
 

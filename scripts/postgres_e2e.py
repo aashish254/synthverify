@@ -74,10 +74,26 @@ def ensure_server(url: str | None, port: int):
     host_port = port + 1000
     print(f"no server given: starting {IMAGE} as {container} on :{host_port}")
     subprocess.run(
-        ["docker", "run", "-d", "--name", container,
-         "-e", "POSTGRES_USER=sv", "-e", "POSTGRES_PASSWORD=sv",
-         "-e", "POSTGRES_DB=postgres", "-p", f"{host_port}:5432", IMAGE],
-        check=True, capture_output=True, text=True, encoding="utf-8",
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            container,
+            "-e",
+            "POSTGRES_USER=sv",
+            "-e",
+            "POSTGRES_PASSWORD=sv",
+            "-e",
+            "POSTGRES_DB=postgres",
+            "-p",
+            f"{host_port}:5432",
+            IMAGE,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     server = f"postgresql+pg8000://sv:sv@127.0.0.1:{host_port}/postgres"
     try:
@@ -93,7 +109,9 @@ def ensure_server(url: str | None, port: int):
         engine.dispose()
         yield server
     finally:
-        subprocess.run(["docker", "rm", "-f", container], check=False, capture_output=True, text=True, encoding="utf-8")
+        subprocess.run(
+            ["docker", "rm", "-f", container], check=False, capture_output=True, text=True, encoding="utf-8"
+        )
         print(f"removed container {container}")
 
 
@@ -129,9 +147,24 @@ def app_process(database_url: str, port: int, storage: Path):
         "SV_ARTIFACTS_DIR": str(storage / "artifacts"),
     }
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "synthverify.app:app",
-         "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
-        cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "synthverify.app:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=REPO,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
     )
     base = f"http://127.0.0.1:{port}"
     try:
@@ -157,8 +190,7 @@ def app_process(database_url: str, port: int, storage: Path):
 
 
 def _ingest(client: httpx.Client, blob: bytes, filename: str = "evidence.jpg") -> str:
-    response = client.post("/api/v1/media/ingest",
-                           files={"file": (filename, io.BytesIO(blob), "image/jpeg")})
+    response = client.post("/api/v1/media/ingest", files={"file": (filename, io.BytesIO(blob), "image/jpeg")})
     response.raise_for_status()
     return response.json()["job_id"]
 
@@ -179,36 +211,61 @@ def run_smoke(base: str, database_url: str) -> None:
 
     health = admin.get("/healthz").json()
     ready = admin.get("/readyz").json()
-    check("app boots on Postgres", health["status"] == "ok" and ready["database"]["ok"] is True,
-          f"v{health['version']}, dialect {sa.make_url(database_url).get_backend_name()}")
+    check(
+        "app boots on Postgres",
+        health["status"] == "ok" and ready["database"]["ok"] is True,
+        f"v{health['version']}, dialect {sa.make_url(database_url).get_backend_name()}",
+    )
 
     anonymous = httpx.Client(base_url=base, timeout=30)
-    status = anonymous.post("/api/v1/media/analyze",
-                            files={"file": ("x.jpg", blob, "image/jpeg")}).status_code
+    status = anonymous.post(
+        "/api/v1/media/analyze", files={"file": ("x.jpg", blob, "image/jpeg")}
+    ).status_code
     check("unauthenticated request rejected", status in (401, 403), f"HTTP {status}")
 
-    sync = admin.post("/api/v1/media/analyze",
-                      files={"file": ("evidence.jpg", io.BytesIO(blob), "image/jpeg")}).json()
-    check("sync analyze completes on Postgres", sync["verdict"]["risk_tier"] == "MEDIUM",
-          f"{sync['verdict']['risk_tier']} / {sync['verdict']['risk_score']}")
+    sync = admin.post(
+        "/api/v1/media/analyze", files={"file": ("evidence.jpg", io.BytesIO(blob), "image/jpeg")}
+    ).json()
+    check(
+        "sync analyze completes on Postgres",
+        sync["verdict"]["risk_tier"] == "MEDIUM",
+        f"{sync['verdict']['risk_tier']} / {sync['verdict']['risk_score']}",
+    )
 
-    issued = admin.post("/api/v1/admin/keys", json={"name": "newsroom-x key", "role": "analyst",
-                                                    "organisation": "newsroom-x"}).json()
+    issued = admin.post(
+        "/api/v1/admin/keys", json={"name": "newsroom-x key", "role": "analyst", "organisation": "newsroom-x"}
+    ).json()
     org_secret = issued.get("api_key") or issued.get("secret") or issued.get("key")
-    check("org-scoped analyst key issued", bool(org_secret),
-          f"key_id {(issued.get('record') or {}).get('key_id')}, org "
-          f"{(issued.get('record') or {}).get('organisation')}")
+    check(
+        "org-scoped analyst key issued",
+        bool(org_secret),
+        f"key_id {(issued.get('record') or {}).get('key_id')}, org "
+        f"{(issued.get('record') or {}).get('organisation')}",
+    )
     org = httpx.Client(base_url=base, headers={"X-API-Key": org_secret}, timeout=60)
 
     # Routing resolves the organisation's profile when the worker runs the job, so the
     # profile has to exist before ingestion - not at report time.
-    strict = admin.post("/api/v1/admin/policy/profiles", json={
-        "name": "strict-pg", "organisation": "newsroom-x", "description": "tighter thresholds",
-        "thresholds": {"block_score": 0.30, "escalate_score": 0.25, "review_score": 0.20,
-                       "low_confidence": 0.30, "min_coverage": 0.50},
-    }).json()
-    check("policy profile round-trips through Postgres", strict.get("name") == "strict-pg",
-          json.dumps(strict.get("thresholds")))
+    strict = admin.post(
+        "/api/v1/admin/policy/profiles",
+        json={
+            "name": "strict-pg",
+            "organisation": "newsroom-x",
+            "description": "tighter thresholds",
+            "thresholds": {
+                "block_score": 0.30,
+                "escalate_score": 0.25,
+                "review_score": 0.20,
+                "low_confidence": 0.30,
+                "min_coverage": 0.50,
+            },
+        },
+    ).json()
+    check(
+        "policy profile round-trips through Postgres",
+        strict.get("name") == "strict-pg",
+        json.dumps(strict.get("thresholds")),
+    )
 
     jobs = {"default": _ingest(admin, blob), "newsroom-x": _ingest(org, blob)}
     _ingest(admin, blob, "evidence-again.jpg")  # third submission, identical bytes, same org, new name
@@ -219,68 +276,99 @@ def run_smoke(base: str, database_url: str) -> None:
             sa.text("SELECT organisation, filename, storage_path FROM media_assets ORDER BY organisation")
         ).all()
         job_rows = conn.execute(sa.text("SELECT count(*) FROM jobs")).scalar_one()
-        legacy = conn.execute(sa.text(
-            "SELECT count(*) FROM information_schema.columns "
-            "WHERE table_name = 'jobs' AND column_name = 'LOW'")).scalar_one()
+        legacy = conn.execute(
+            sa.text(
+                "SELECT count(*) FROM information_schema.columns "
+                "WHERE table_name = 'jobs' AND column_name = 'LOW'"
+            )
+        ).scalar_one()
     # `AC-IDAM-3` moved dedup from "per digest" to "per digest *and organisation*", because one shared
     # asset row handed a second tenant the first one's chosen filename. So the expected shape here is
     # two rows carrying their own submitter's name over one stored object - which is also what makes
     # the same-org replay below worth running: it must add neither a row nor a name.
     rows = [(a.organisation, a.filename) for a in assets]
-    check("content-addressed dedup is scoped to one organisation",
-          rows == [("default", "evidence.jpg"), ("newsroom-x", "evidence.jpg")] and job_rows == 3,
-          f"{job_rows} jobs -> {rows}")
+    check(
+        "content-addressed dedup is scoped to one organisation",
+        rows == [("default", "evidence.jpg"), ("newsroom-x", "evidence.jpg")] and job_rows == 3,
+        f"{job_rows} jobs -> {rows}",
+    )
     locations = {a.storage_path for a in assets}
     stored_path = next(iter(locations))
-    check("both rows' bytes resolve to one stored object",
-          len(locations) == 1 and stored_path.endswith(f"{digest}_evidence.jpg"),
-          f"{len(locations)} location for digest {digest[:12]}")
+    check(
+        "both rows' bytes resolve to one stored object",
+        len(locations) == 1 and stored_path.endswith(f"{digest}_evidence.jpg"),
+        f"{len(locations)} location for digest {digest[:12]}",
+    )
     check("schema is the corrected one", legacy == 0, 'jobs.risk_tier, no jobs."LOW"')
 
     org_job = _wait_job(org, jobs["newsroom-x"])
     default_job = _wait_job(admin, jobs["default"])
     org_score = org_job["result"]["verdict"]["risk_score"]
-    check("report JSON survives the Postgres json column",
-          org_score == default_job["result"]["verdict"]["risk_score"] == sync["verdict"]["risk_score"],
-          f"identical {org_score} in all three views")
-    check("per-org policy changes the action, not the score",
-          org_job["result"]["policy_name"] == "strict-pg"
-          and org_job["result"]["verdict"]["recommended_action"] == "BLOCK"
-          and default_job["result"]["verdict"]["recommended_action"] != "BLOCK",
-          f"default {default_job['result']['verdict']['recommended_action']} / "
-          f"newsroom-x {org_job['result']['verdict']['recommended_action']}")
+    check(
+        "report JSON survives the Postgres json column",
+        org_score == default_job["result"]["verdict"]["risk_score"] == sync["verdict"]["risk_score"],
+        f"identical {org_score} in all three views",
+    )
+    check(
+        "per-org policy changes the action, not the score",
+        org_job["result"]["policy_name"] == "strict-pg"
+        and org_job["result"]["verdict"]["recommended_action"] == "BLOCK"
+        and default_job["result"]["verdict"]["recommended_action"] != "BLOCK",
+        f"default {default_job['result']['verdict']['recommended_action']} / "
+        f"newsroom-x {org_job['result']['verdict']['recommended_action']}",
+    )
 
     artifacts = admin.get(f"/api/v1/jobs/{jobs['default']}/artifacts").json()["items"]
     heatmap = admin.get(artifacts[0]["url"], follow_redirects=True)
-    check("ELA heatmap served back to the analyst",
-          heatmap.status_code == 200 and heatmap.content[:8] == b"\x89PNG\r\n\x1a\n",
-          f"{len(heatmap.content)} bytes {heatmap.headers.get('content-type')}")
+    check(
+        "ELA heatmap served back to the analyst",
+        heatmap.status_code == 200 and heatmap.content[:8] == b"\x89PNG\r\n\x1a\n",
+        f"{len(heatmap.content)} bytes {heatmap.headers.get('content-type')}",
+    )
 
     object_path = Path(stored_path)
     if not object_path.is_absolute():
         object_path = REPO / object_path
-    check("media object written to the store", object_path.exists(),
-          f"{object_path.name} holds {object_path.stat().st_size if object_path.exists() else 0} bytes "
-          f"of digest {digest[:12]}")
+    check(
+        "media object written to the store",
+        object_path.exists(),
+        f"{object_path.name} holds {object_path.stat().st_size if object_path.exists() else 0} bytes "
+        f"of digest {digest[:12]}",
+    )
 
     before = admin.get("/api/v1/admin/audit/verify").json()
-    check("audit chain verifies on Postgres", before["verified"] is True,
-          f"{before['entries_checked']} entries, head {str(before.get('head_hash'))[:12]}")
+    check(
+        "audit chain verifies on Postgres",
+        before["verified"] is True,
+        f"{before['entries_checked']} entries, head {str(before.get('head_hash'))[:12]}",
+    )
     with engine.begin() as conn:
-        conn.execute(sa.text("UPDATE audit_events SET action = 'tampered' "
-                             "WHERE seq = (SELECT min(seq) FROM audit_events)"))
+        conn.execute(
+            sa.text(
+                "UPDATE audit_events SET action = 'tampered' WHERE seq = (SELECT min(seq) FROM audit_events)"
+            )
+        )
     after = admin.get("/api/v1/admin/audit/verify").json()
-    check("audit tampering detected on Postgres", after["verified"] is False,
-          f"break reported at {after.get('break_at_seq')}")
+    check(
+        "audit tampering detected on Postgres",
+        after["verified"] is False,
+        f"break reported at {after.get('break_at_seq')}",
+    )
     with engine.begin() as conn:
         conn.execute(sa.text("UPDATE audit_events SET action = 'key.created' WHERE action = 'tampered'"))
     restored = admin.get("/api/v1/admin/audit/verify").json()
-    check("chain verifies again once the edit is reverted", restored["verified"] is True,
-          f"{restored['entries_checked']} entries")
+    check(
+        "chain verifies again once the edit is reverted",
+        restored["verified"] is True,
+        f"{restored['entries_checked']} entries",
+    )
 
     stats = admin.get("/api/v1/admin/stats").json()
-    check("admin aggregates read back", stats["jobs_by_status"].get("completed") == 3,
-          json.dumps(stats["jobs_by_status"]))
+    check(
+        "admin aggregates read back",
+        stats["jobs_by_status"].get("completed") == 3,
+        json.dumps(stats["jobs_by_status"]),
+    )
     engine.dispose()
 
 
@@ -289,8 +377,11 @@ def run_smoke(base: str, database_url: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the product's Postgres e2e smoke.")
-    parser.add_argument("--url", default=os.environ.get("SV_TEST_POSTGRES_URL") or None,
-                        help="reachable server URL (default: $SV_TEST_POSTGRES_URL, else start docker)")
+    parser.add_argument(
+        "--url",
+        default=os.environ.get("SV_TEST_POSTGRES_URL") or None,
+        help="reachable server URL (default: $SV_TEST_POSTGRES_URL, else start docker)",
+    )
     parser.add_argument("--port", type=int, default=8099, help="port for the app under test")
     args = parser.parse_args()
 

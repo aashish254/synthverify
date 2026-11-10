@@ -97,10 +97,16 @@ class TestValidManifest:
     def test_validated_manifest_exposes_what_the_report_needs(self):
         data = manifest()
         ModelManifest.from_dict(data)  # must not raise on KeyError
-        built = ModelManifest(id=data["id"], detector=data["detector"], media_type="image",
-                             license="Apache-2.0", dataset_license="CC0-1.0",
-                             weights_source=data["weights_source"], weights_sha256=_SHA_A,
-                             eval_report=data["eval_report"])
+        built = ModelManifest(
+            id=data["id"],
+            detector=data["detector"],
+            media_type="image",
+            license="Apache-2.0",
+            dataset_license="CC0-1.0",
+            weights_source=data["weights_source"],
+            weights_sha256=_SHA_A,
+            eval_report=data["eval_report"],
+        )
         assert built.name == built.id  # no 'name' key -> falls back to id
         assert built.metrics == {"auc": 0.941, "eer": 0.072, "ece": 0.028}
         assert built.to_dict()["detector"] == "image_deepfake"
@@ -173,7 +179,9 @@ class TestLicenceRules:
         issues = validate_manifest(manifest(dataset_license=dataset_license))
         assert issues and "license" in reasons(issues)
 
-    @pytest.mark.parametrize("permissive", ["MIT", "Apache-2.0", "BSD-3-Clause", "CC0-1.0", "CDLA-Permissive-2.0"])
+    @pytest.mark.parametrize(
+        "permissive", ["MIT", "Apache-2.0", "BSD-3-Clause", "CC0-1.0", "CDLA-Permissive-2.0"]
+    )
     def test_allowlisted_licences_pass_for_both_layers(self, permissive):
         assert validate_manifest(manifest(license=permissive, dataset_license=permissive)) == []
 
@@ -219,9 +227,7 @@ class TestWeightsSourceIsPublic:
 
 
 class TestSHA256:
-    @pytest.mark.parametrize(
-        "bad", ["", "abc123", "A" * 64, "z" * 64, _SHA_A + "f0", None]
-    )
+    @pytest.mark.parametrize("bad", ["", "abc123", "A" * 64, "z" * 64, _SHA_A + "f0", None])
     def test_only_a_full_lowercase_digest_is_trusted(self, bad):
         issues = validate_manifest(manifest(weights_sha256=bad))
         assert issues, f"{bad!r} accepted as a sha256"
@@ -328,9 +334,7 @@ class TestLoader:
     def _write(self, dir_path: Path, name: str, payload: Any) -> Path:
         dir_path.mkdir(parents=True, exist_ok=True)
         path = dir_path / name
-        path.write_text(
-            payload if isinstance(payload, str) else json.dumps(payload), encoding="utf-8"
-        )
+        path.write_text(payload if isinstance(payload, str) else json.dumps(payload), encoding="utf-8")
         return path
 
     def test_a_valid_manifest_file_loads(self, tmp_path):
@@ -408,9 +412,14 @@ class TestRegistryCrossCheck:
     @staticmethod
     def _manifest(detector: str = "image_deepfake") -> ModelManifest:
         return ModelManifest(
-            id="m", detector=detector, media_type="image", license="MIT",
-            dataset_license="CC0-1.0", weights_source="https://example.org/m",
-            weights_sha256=_SHA_A, eval_report={},
+            id="m",
+            detector=detector,
+            media_type="image",
+            license="MIT",
+            dataset_license="CC0-1.0",
+            weights_source="https://example.org/m",
+            weights_sha256=_SHA_A,
+            eval_report={},
         )
 
     def test_an_ml_detector_with_no_manifest_is_blocked(self):
@@ -464,7 +473,11 @@ class TestRepositoryConformance:
     def test_cli_exits_zero(self):
         result = subprocess.run(
             [PY, "-m", "synthverify.cli", "model-manifests"],
-            capture_output=True, text=True, cwd=str(PROJECT), timeout=120, encoding="utf-8",
+            capture_output=True,
+            text=True,
+            cwd=str(PROJECT),
+            timeout=120,
+            encoding="utf-8",
         )
         assert result.returncode == 0, result.stderr
         assert "RESULT: PASS" in result.stdout
@@ -472,7 +485,11 @@ class TestRepositoryConformance:
     def test_cli_json_is_machine_readable(self):
         result = subprocess.run(
             [PY, "-m", "synthverify.cli", "model-manifests", "--json"],
-            capture_output=True, text=True, cwd=str(PROJECT), timeout=120, encoding="utf-8",
+            capture_output=True,
+            text=True,
+            cwd=str(PROJECT),
+            timeout=120,
+            encoding="utf-8",
         )
         payload = json.loads(result.stdout)
         assert payload["ok"] is True

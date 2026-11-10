@@ -222,7 +222,9 @@ def process_job(db, job_id: str, claim: JobClaim | None = None) -> None:
                 db=db,
             )
         except PipelineError as exc:
-            METRICS.inc("synthverify_jobs_failed_total", {"reason": "pipeline_error"}, exemplar=exemplar_labels())
+            METRICS.inc(
+                "synthverify_jobs_failed_total", {"reason": "pipeline_error"}, exemplar=exemplar_labels()
+            )
             with db.session() as session:
                 _fail_job(session, job_id, str(exc), claim)
             return
@@ -295,12 +297,16 @@ def process_job(db, job_id: str, claim: JobClaim | None = None) -> None:
             session.commit()
 
             # fire pending webhook deliveries for this job immediately
-            pending = session.execute(
-                select(WebhookDelivery).where(
-                    WebhookDelivery.job_id == job_id,
-                    WebhookDelivery.status == DeliveryStatus.PENDING.value,
+            pending = (
+                session.execute(
+                    select(WebhookDelivery).where(
+                        WebhookDelivery.job_id == job_id,
+                        WebhookDelivery.status == DeliveryStatus.PENDING.value,
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             for delivery in pending:
                 deliver_now(session, delivery.id)
 

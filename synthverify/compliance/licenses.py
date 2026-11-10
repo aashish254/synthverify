@@ -490,11 +490,15 @@ def resolve_dist_license(dist: Distribution) -> tuple[LicenseStatus, str | None,
         return status, canonical, "License-Expression", _status_note(status, canonical)
 
     classifiers = [
-        value for key, value in dist.metadata.items() if key == "Classifier" and value.startswith("License ::")  # type: ignore[attr-defined]  # items() absent from the Protocol stub; runtime class is email.message.Message
+        value
+        for key, value in dist.metadata.items()
+        if key == "Classifier" and value.startswith("License ::")  # type: ignore[attr-defined]  # items() absent from the Protocol stub; runtime class is email.message.Message
     ]
     if any(c.startswith("License :: Other/Proprietary") or "Non-FOSS" in c for c in classifiers):
         return LicenseStatus.FORBIDDEN, "Proprietary", "classifier", "classifier declares a non-open licence"
-    approved = [c.rsplit("::", 1)[-1].strip() for c in classifiers if c.startswith("License :: OSI Approved ::")]
+    approved = [
+        c.rsplit("::", 1)[-1].strip() for c in classifiers if c.startswith("License :: OSI Approved ::")
+    ]
     if approved:
         status, canonical = classify_expression(" OR ".join(approved))
         if status is not LicenseStatus.UNKNOWN:
@@ -549,9 +553,7 @@ def installed_distributions() -> dict[str, list[Distribution]]:
     return index
 
 
-def declared_requirements(
-    pyproject_path: Path, groups: Iterable[str] | None = None
-) -> dict[str, list[str]]:
+def declared_requirements(pyproject_path: Path, groups: Iterable[str] | None = None) -> dict[str, list[str]]:
     """``{group: [requirement strings]}`` from ``pyproject.toml``.
 
     Group ``core`` holds ``[project].dependencies``; each optional-dependency

@@ -54,15 +54,19 @@ class VideoMetadataDetector(Detector):
             score += 0.25
             confidence = 0.55
 
-        if vid.fps_hint and vid.fps_hint in (0.0, 1.0, 5.0) :
-            findings.append(f"Abnormal frame rate ({vid.fps_hint} fps) suggests re-assembly or synthetic timing.")
+        if vid.fps_hint and vid.fps_hint in (0.0, 1.0, 5.0):
+            findings.append(
+                f"Abnormal frame rate ({vid.fps_hint} fps) suggests re-assembly or synthetic timing."
+            )
             flags.append("ABNORMAL_FPS")
             score += 0.10
 
         duration = vid.frame_count / vid.fps_hint if vid.fps_hint else 0.0
         evidence["duration_s"] = round(duration, 2)
         if 0 < duration < 3.0 and vid.frame_count < 90:
-            findings.append(f"Very short clip ({duration:.1f}s, {vid.frame_count} frames) - deepfake inserts are typically brief.")
+            findings.append(
+                f"Very short clip ({duration:.1f}s, {vid.frame_count} frames) - deepfake inserts are typically brief."
+            )
             flags.append("SHORT_CLIP")
             score += 0.10
 
@@ -94,7 +98,9 @@ class VideoMetadataDetector(Detector):
                 )
 
         if not flags:
-            findings.append("Container profile shows no generator-native geometry, timing or compression anomalies.")
+            findings.append(
+                "Container profile shows no generator-native geometry, timing or compression anomalies."
+            )
 
         return DetectorResult(
             detector=self.name,

@@ -295,7 +295,9 @@ def test_cells_against_reals_joins_every_generator_with_the_same_photographs(tmp
     from synthverify.eval import evaluate
 
     assert evaluate(*cells["midjourney"]).auc == pytest.approx(1.0)
-    assert evaluate(*cells["glidelines"]).auc == pytest.approx(0.5), "0.3 clears both reals, 0.05 clears neither"
+    assert evaluate(*cells["glidelines"]).auc == pytest.approx(0.5), (
+        "0.3 clears both reals, 0.05 clears neither"
+    )
 
 
 def test_cells_against_reals_drops_a_skipped_real_row_because_its_zero_would_be_an_opinion(tmp_path):
@@ -388,9 +390,7 @@ def test_subset_returns_the_named_keys_as_a_view_and_carries_the_read_notes(tmp_
 
 def test_latency_is_reported_over_every_status_because_a_skip_still_cost_time(tmp_path):
     path = table_path(tmp_path)
-    ScoreWriter(path).write(
-        [row("a", latency_ms=10.0), row("b", latency_ms=20.0, status="skipped")]
-    )
+    ScoreWriter(path).write([row("a", latency_ms=10.0), row("b", latency_ms=20.0, status="skipped")])
     stats = ScoreTable.load(path).latency_ms("image_ela")
     assert stats["n"] == 2.0
     assert stats["mean_ms"] == pytest.approx(15.0)
@@ -480,9 +480,7 @@ def test_a_real_detector_result_adapts_into_a_row(tmp_path):
         status=ResultStatus.RAN,
     )
     result.runtime_ms = 31.25
-    adapted = row_from_result(
-        sample_id="x1", dataset="genai", generator="midjourney", truth=1, result=result
-    )
+    adapted = row_from_result(sample_id="x1", dataset="genai", generator="midjourney", truth=1, result=result)
     assert adapted.detector == "image_noise"
     assert adapted.status == "ran"
     assert adapted.score == pytest.approx(0.6125)
@@ -502,9 +500,7 @@ def test_a_skipped_detector_result_carries_its_status_rather_than_its_zero(tmp_p
         confidence=0.0,
         status=ResultStatus.SKIPPED,
     )
-    adapted = row_from_result(
-        sample_id="x2", dataset="cv", generator="vctk", truth=0, result=result
-    )
+    adapted = row_from_result(sample_id="x2", dataset="cv", generator="vctk", truth=0, result=result)
     assert adapted.status == "skipped"
     path = table_path(tmp_path)
     ScoreWriter(path).write([adapted])
@@ -519,9 +515,7 @@ def test_the_row_written_from_a_result_is_the_row_the_table_reads_back(tmp_path)
         detector="image_ela", media_type="image", score=0.999999, confidence=1 / 3, status=ResultStatus.RAN
     )
     result.runtime_ms = 1 / 3
-    adapted = row_from_result(
-        sample_id="x3", dataset="genai", generator="sdxl", truth=1, result=result
-    )
+    adapted = row_from_result(sample_id="x3", dataset="genai", generator="sdxl", truth=1, result=result)
     path = table_path(tmp_path)
     ScoreWriter(path).write([adapted])
     read_back = ScoreTable.load(path).rows[0]
@@ -551,6 +545,4 @@ def test_the_adapter_refuses_a_status_outside_the_result_vocabulary():
         runtime_ms = 1.0
 
     with pytest.raises(ScoreTableError, match="status must be one of"):
-        row_from_result(
-            sample_id="x5", dataset="genai", generator="sdxl", truth=1, result=Wrong()
-        )
+        row_from_result(sample_id="x5", dataset="genai", generator="sdxl", truth=1, result=Wrong())

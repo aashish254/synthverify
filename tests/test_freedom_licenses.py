@@ -356,7 +356,9 @@ class TestDependencyClosure:
         index = self.index(
             FakeDist(
                 "root",
-                headers={"Requires-Dist": ["needed>=1", 'sphinx ; extra == "docs"', 'hypothesis ; extra == "test"']},
+                headers={
+                    "Requires-Dist": ["needed>=1", 'sphinx ; extra == "docs"', 'hypothesis ; extra == "test"']
+                },
             ),
             FakeDist("needed"),
             FakeDist("sphinx"),
@@ -383,10 +385,15 @@ class TestDependencyClosure:
         on 3.11. Grading it anyway would make the closure - and any lock written from
         it - depend on what a shared environment happens to hold."""
         index = self.index(
-            FakeDist("alembic", headers={"Requires-Dist": [
-                "mako>=1.1.3",
-                'importlib-metadata>=3.6 ; python_version < "3.10"',
-            ]}),
+            FakeDist(
+                "alembic",
+                headers={
+                    "Requires-Dist": [
+                        "mako>=1.1.3",
+                        'importlib-metadata>=3.6 ; python_version < "3.10"',
+                    ]
+                },
+            ),
             FakeDist("mako"),
             FakeDist("importlib-metadata"),
         )
@@ -411,11 +418,16 @@ class TestDependencyClosure:
     def test_the_walk_reports_what_it_did_not_follow(self):
         """An omission the report does not mention reads like coverage."""
         index = self.index(
-            FakeDist("root", headers={"Requires-Dist": [
-                "needed",
-                'sphinx ; extra == "docs"',
-                'typed-ast ; python_version < "3.8"',
-            ]}),
+            FakeDist(
+                "root",
+                headers={
+                    "Requires-Dist": [
+                        "needed",
+                        'sphinx ; extra == "docs"',
+                        'typed-ast ; python_version < "3.8"',
+                    ]
+                },
+            ),
             FakeDist("needed"),
             FakeDist("sphinx"),
             FakeDist("typed-ast"),
@@ -551,6 +563,7 @@ class TestRepositoryConformance:
         module = __import__(module_name, fromlist=[attribute])
         assert callable(getattr(module, attribute, None))
 
+
 def test_cli_exit_code_is_nonzero_when_a_scan_fails(monkeypatch: pytest.MonkeyPatch):
     from synthverify.compliance import licenses
 
@@ -574,7 +587,8 @@ def test_subprocess_run_of_the_gate_is_green():
         [sys.executable, "-m", "synthverify.cli", "licenses", "--project-root", str(REPO_ROOT)],
         capture_output=True,
         text=True,
-        cwd=REPO_ROOT, encoding="utf-8",
+        cwd=REPO_ROOT,
+        encoding="utf-8",
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "RESULT: PASS" in result.stdout

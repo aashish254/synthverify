@@ -89,7 +89,9 @@ def _routes(app_routes: Any) -> Iterator[tuple[tuple[str, str], Callable[..., An
     than quietly checking nothing.
     """
     for route in app_routes:
-        nested = getattr(route, "routes", None) or getattr(getattr(route, "original_router", None), "routes", None)
+        nested = getattr(route, "routes", None) or getattr(
+            getattr(route, "original_router", None), "routes", None
+        )
         if nested:
             yield from _routes(nested)
         elif getattr(route, "endpoint", None) is not None and getattr(route, "methods", None):
@@ -112,7 +114,9 @@ async def _hold_and_probe(
     while not arrival.is_set():
         if task.done():
             release.set()
-            raise AssertionError(f"the endpoint returned without reaching the held work step: {task.result()!r}")
+            raise AssertionError(
+                f"the endpoint returned without reaching the held work step: {task.result()!r}"
+            )
         if time.monotonic() > deadline:
             release.set()
             task.cancel()
@@ -168,7 +172,9 @@ CASES = [
     Case(
         name="media-ingest-batch",
         target="synthverify.worker:submit_job",
-        request=lambda c, _: c.post(f"{API}/media/ingest/batch", files=[("files", ("a.jpg", natural_photo()))]),
+        request=lambda c, _: c.post(
+            f"{API}/media/ingest/batch", files=[("files", ("a.jpg", natural_photo()))]
+        ),
         expected_status=202,
     ),
     Case(
@@ -292,7 +298,9 @@ class TestTheInstrumentBites:
             latency, response = await _hold_and_probe(client, arrival, release, client.get("/in-thread"))
         assert response.status_code == 200
         assert response.json() == {"status": "held-in-a-thread"}
-        assert latency < FAST_PROBE_SECONDS, f"a thread-pooled handler still stalled the probe ({latency:.2f}s)"
+        assert latency < FAST_PROBE_SECONDS, (
+            f"a thread-pooled handler still stalled the probe ({latency:.2f}s)"
+        )
 
 
 class TestTheRuleIsStructural:

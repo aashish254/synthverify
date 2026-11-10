@@ -79,12 +79,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--table", required=True, type=Path)
     parser.add_argument("--split-file", required=True, type=Path)
     parser.add_argument("--split", default="held_out_test", help="one split name (default: held_out_test)")
-    parser.add_argument("--provenance", type=Path, default=None, help="for the pixel size and real_source per sample")
+    parser.add_argument(
+        "--provenance", type=Path, default=None, help="for the pixel size and real_source per sample"
+    )
     args = parser.parse_args(argv)
 
     provenance = args.provenance or args.table.parent / "provenance.jsonl"
     if not provenance.is_file():
-        print(f"{provenance}: the controls group rows by source metadata, so it has to be readable", file=sys.stderr)
+        print(
+            f"{provenance}: the controls group rows by source metadata, so it has to be readable",
+            file=sys.stderr,
+        )
         return 2
 
     meta: dict[str, dict[str, str]] = {}
@@ -150,7 +155,9 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             ci = metrics.auc_ci
             gap = abs(metrics.auc - 0.5)
-            verdict = "ARTEFACT" if gap >= 0.10 and metrics.sufficient else "weak" if gap >= 0.02 else "near 0.5"
+            verdict = (
+                "ARTEFACT" if gap >= 0.10 and metrics.sufficient else "weak" if gap >= 0.02 else "near 0.5"
+            )
             flag = "" if metrics.sufficient else f"  (thin: {metrics.n_positive}/{metrics.n_negative})"
             print(
                 f"  {detector:<14} n={metrics.n:<5} pos/neg={metrics.n_positive}/{metrics.n_negative:<5} "

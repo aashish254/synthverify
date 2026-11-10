@@ -158,9 +158,7 @@ def measure(root: Path, records: list[dict[str, Any]]) -> dict[str, dict[str, An
             if measured_format != str(record["source"].get("format", "")).upper():
                 mismatched_claims.append(f"{record['file']}: format")
             elif claimed and [int(claimed[0]), int(claimed[1])] != [width, height]:
-                mismatched_claims.append(
-                    f"{record['file']}: claims {claimed}, file is {width}x{height}"
-                )
+                mismatched_claims.append(f"{record['file']}: claims {claimed}, file is {width}x{height}")
         out[f"{generator}|{cell}"] = {
             "generator": generator,
             "dir": cell,
@@ -206,10 +204,7 @@ def print_report(out: dict[str, dict[str, Any]], *, json_path: Path | None) -> N
         if cell["n"] != cell["decoded"]:
             print(f"{key}: decoded {cell['decoded']} of {cell['n']} recorded files")
     total = sum(cell["n"] for cell in out.values())
-    print(
-        f"\ntotal {total} files, "
-        f"{sum(cell['bytes_total'] for cell in out.values()) / 1e6:.1f} MB on disk"
-    )
+    print(f"\ntotal {total} files, {sum(cell['bytes_total'] for cell in out.values()) / 1e6:.1f} MB on disk")
     if json_path is not None:
         json_path.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"wrote {json_path}")
@@ -217,9 +212,15 @@ def print_report(out: dict[str, dict[str, Any]], *, json_path: Path | None) -> N
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--root", required=True, type=Path, help="corpus root holding <dir>/ and provenance.jsonl")
-    parser.add_argument("--provenance", type=Path, default=None, help="JSONL to read (default: <root>/provenance.jsonl)")
-    parser.add_argument("--manifest", type=Path, default=None, help="manifest CSV to cross-check, if one is written")
+    parser.add_argument(
+        "--root", required=True, type=Path, help="corpus root holding <dir>/ and provenance.jsonl"
+    )
+    parser.add_argument(
+        "--provenance", type=Path, default=None, help="JSONL to read (default: <root>/provenance.jsonl)"
+    )
+    parser.add_argument(
+        "--manifest", type=Path, default=None, help="manifest CSV to cross-check, if one is written"
+    )
     parser.add_argument("--json", type=Path, default=None, help="write the per-cell measurements here")
     args = parser.parse_args(argv)
 

@@ -377,8 +377,7 @@ def validate_container(data: bytes) -> ProvenanceResult:
             verdict=ProvenanceVerdict.INVALID,
             checked=True,
             manifest_present=True,
-            reason="asset bytes do not match the claim's data-hash binding "
-            "(content changed after signing)",
+            reason="asset bytes do not match the claim's data-hash binding (content changed after signing)",
             issuer=issuer,
             details={"signature_valid": True, "data_binding_valid": False},
         )

@@ -104,7 +104,11 @@ class Stack:
             "SV_SCALE_EMBEDDED_WORKER": "true" if args.embedded else "false",
         }
         # The mutation that has no consumer tier must not quietly start one.
-        self.services = ["api1", "api2"] if args.without_workers or args.embedded else ["api1", "api2", "worker1", "worker2"]
+        self.services = (
+            ["api1", "api2"]
+            if args.without_workers or args.embedded
+            else ["api1", "api2", "worker1", "worker2"]
+        )
         # `--wait` is only asked of a service that has a healthcheck to wait for. The replicas do
         # (`/healthz`); the consumer tier deliberately does not - a `synthverify worker` has no
         # listening socket, so no probe could mean anything by "ready", and inventing one would be
@@ -128,13 +132,26 @@ class Stack:
         # The base image is the one `make airgap` seals: no Postgres driver in it, by declaration.
         subprocess.run(
             ["docker", "build", "-f", "docker/Dockerfile", "-t", BASE_IMAGE, "."],
-            cwd=REPO, check=True, env=self.env,
+            cwd=REPO,
+            check=True,
+            env=self.env,
         )
         # ...and the scale image is that image plus the driver, which is the whole deployment delta.
         subprocess.run(
-            ["docker", "build", "-f", "docker/Dockerfile.postgres", "--build-arg", f"BASE={BASE_IMAGE}",
-             "-t", SCALE_IMAGE, "."],
-            cwd=REPO, check=True, env=self.env,
+            [
+                "docker",
+                "build",
+                "-f",
+                "docker/Dockerfile.postgres",
+                "--build-arg",
+                f"BASE={BASE_IMAGE}",
+                "-t",
+                SCALE_IMAGE,
+                ".",
+            ],
+            cwd=REPO,
+            check=True,
+            env=self.env,
         )
 
     def up(self) -> None:
@@ -149,8 +166,10 @@ class Stack:
             if result.returncode != 0:
                 self.dump()
                 raise RuntimeError(f"`docker compose up` failed for {self.consumer_services}")
-        print(f"stack {self.project} up: {', '.join(self.services)} on :{self.api_ports[0]}/:{self.api_ports[1]},"
-              f" postgres on :{self.pg_port}")
+        print(
+            f"stack {self.project} up: {', '.join(self.services)} on :{self.api_ports[0]}/:{self.api_ports[1]},"
+            f" postgres on :{self.pg_port}"
+        )
 
     def dump(self) -> None:
         for label, args in (
@@ -231,9 +250,7 @@ def replay_idempotency(stack: Stack, jobs: int) -> tuple[int, int]:
     from fixtures_gen import natural_photo
 
     source = natural_photo(width=512, height=384)
-    clients = [
-        httpx.Client(base_url=url, headers={"X-API-Key": ADMIN_KEY}, timeout=60) for url in stack.urls
-    ]
+    clients = [httpx.Client(base_url=url, headers={"X-API-Key": ADMIN_KEY}, timeout=60) for url in stack.urls]
     replayed = reused = 0
     try:
         for index in range(0, jobs, 8):
@@ -295,10 +312,26 @@ def check_driver_is_the_delta(stack: Stack) -> None:
     """
     url = f"postgresql+psycopg://sv:{PG_PASSWORD}@postgres:5432/synthverify"
     result = subprocess.run(
-        ["docker", "run", "--rm", "--network", f"{stack.project}_default",
-         "--entrypoint", "python", BASE_IMAGE,
-         "-m", "synthverify.cli", "db-upgrade", "--url", url],
-        cwd=REPO, capture_output=True, text=True, check=False, encoding="utf-8",
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            f"{stack.project}_default",
+            "--entrypoint",
+            "python",
+            BASE_IMAGE,
+            "-m",
+            "synthverify.cli",
+            "db-upgrade",
+            "--url",
+            url,
+        ],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
     output = ((result.stdout or "") + (result.stderr or "")).strip()
     tail = output.splitlines()[-1] if output else "no output"
@@ -317,9 +350,7 @@ def run_checks(stack: Stack, jobs: int, by_job: dict[str, int], deadline: float)
         for url in stack.urls:
             with contextlib.suppress(httpx.HTTPError):
                 ready.append(httpx.get(f"{url}/readyz", timeout=10).json())
-        shape = [
-            (r.get("job_broker"), r.get("durable_queue"), r.get("embedded_workers")) for r in ready
-        ]
+        shape = [(r.get("job_broker"), r.get("durable_queue"), r.get("embedded_workers")) for r in ready]
         # No special case for the `--embedded` mutation: this reads the shape off `/readyz`, and an
         # in-process queue with a fleet in the request process fails it on its own terms.
         check(
@@ -345,9 +376,7 @@ def run_checks(stack: Stack, jobs: int, by_job: dict[str, int], deadline: float)
         check("both replicas report an empty queue", depths == [0, 0], str(depths))
 
         with engine.connect() as conn:
-            by_status = dict(
-                conn.execute(text("SELECT status, count(*) FROM jobs GROUP BY status")).all()
-            )
+            by_status = dict(conn.execute(text("SELECT status, count(*) FROM jobs GROUP BY status")).all())
         check(
             "every job completed exactly once",
             by_status.get("completed") == jobs and by_status.get("failed", 0) == 0,
@@ -380,9 +409,7 @@ def run_checks(stack: Stack, jobs: int, by_job: dict[str, int], deadline: float)
                     "GROUP BY actor HAVING count(*) > 1"
                 )
             ).all()
-        completions = int(
-            scalar(engine, "SELECT count(*) FROM audit_events WHERE action = 'job.completed'")
-        )
+        completions = int(scalar(engine, "SELECT count(*) FROM audit_events WHERE action = 'job.completed'"))
         check(
             "the ledger holds one completion per job and no job has two",
             not duplicates and completions == jobs,
@@ -417,9 +444,7 @@ def run_checks(stack: Stack, jobs: int, by_job: dict[str, int], deadline: float)
         )
         check("no completed job is missing its verdict", missing_result == 0, f"{missing_result} job(s)")
 
-        with httpx.Client(
-            base_url=stack.urls[0], headers={"X-API-Key": ADMIN_KEY}, timeout=60
-        ) as client:
+        with httpx.Client(base_url=stack.urls[0], headers={"X-API-Key": ADMIN_KEY}, timeout=60) as client:
             # Read a job the *other* replica accepted, so this proves the verdict and its artifact
             # travelled through the shared database and volume rather than living where it was made.
             sample_id = next((j for j, r in by_job.items() if r != 0), next(iter(by_job)))
@@ -432,18 +457,20 @@ def run_checks(stack: Stack, jobs: int, by_job: dict[str, int], deadline: float)
             f"accepted by replica 1, read from replica 0: {sample['status']} / "
             f"{verdict.get('risk_tier')} / coverage {verdict.get('detector_coverage')}",
         )
-        consumers = ("2 API replicas and 2 worker containers" if len(stack.services) == 4
-                     else "2 API replicas only")
+        consumers = (
+            "2 API replicas and 2 worker containers" if len(stack.services) == 4 else "2 API replicas only"
+        )
         check(
             "the audit chain survived every concurrent writer",
             chain.get("verified") is True,
             f"{chain.get('entries_checked')} entries, break reported at {chain.get('break_at_seq')}"
             if chain.get("verified") is not True
-            else f"{chain.get('entries_checked')} entries from "
-            f"{jobs} jobs across {consumers}",
+            else f"{chain.get('entries_checked')} entries from {jobs} jobs across {consumers}",
         )
 
-        accepted = {replica: sum(1 for v in by_job.values() if v == replica) for replica in set(by_job.values())}
+        accepted = {
+            replica: sum(1 for v in by_job.values() if v == replica) for replica in set(by_job.values())
+        }
         check(
             "both replicas accepted work",
             set(by_job.values()) == {0, 1} and len(by_job) == jobs == sum(accepted.values()),
@@ -482,7 +509,10 @@ def main() -> int:
         stack.down()
         left = subprocess.run(
             ["docker", "ps", "-a", "--filter", f"name={stack.project}", "--format", "{{.Names}}"],
-            capture_output=True, text=True, check=False, encoding="utf-8",
+            capture_output=True,
+            text=True,
+            check=False,
+            encoding="utf-8",
         ).stdout.strip()
         print(f"containers left from this project: {left or 'none'}")
 
@@ -491,8 +521,12 @@ def main() -> int:
         print("  FAILED:", line)
     expected = bool(FAILURES)
     if args.expect_fail:
-        print("RESULT:", f"MUTATION CAUGHT ({len(FAILURES)} check(s) failed)" if expected
-              else "MUTATION NOT CAUGHT (the gate accepted a broken stack)")
+        print(
+            "RESULT:",
+            f"MUTATION CAUGHT ({len(FAILURES)} check(s) failed)"
+            if expected
+            else "MUTATION NOT CAUGHT (the gate accepted a broken stack)",
+        )
         code = 0 if expected else 1
     else:
         print("RESULT:", "PASS" if not FAILURES else "FAIL")

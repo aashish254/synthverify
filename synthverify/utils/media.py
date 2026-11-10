@@ -77,7 +77,11 @@ def _magic_type(data: bytes) -> str | None:
         return "image"
     if data[:4] in (b"RIFF",) and data[8:12] in (b"WEBP", b"WAVE"):
         return "audio" if data[8:12] == b"WAVE" else "image"
-    if data[:4] in (b"fLaC",) or data[:3] == b"ID3" or (len(data) > 2 and data[0] == 0xFF and (data[1] & 0xE0) == 0xE0):
+    if (
+        data[:4] in (b"fLaC",)
+        or data[:3] == b"ID3"
+        or (len(data) > 2 and data[0] == 0xFF and (data[1] & 0xE0) == 0xE0)
+    ):
         return "audio"
     if data[:4] in (b"FORM",) and data[8:12] in (b"AIFF",):
         return "audio"
@@ -222,7 +226,9 @@ def _decode_audio_ffmpeg(ffmpeg: str, data: bytes) -> AudioSignal:
     if proc.returncode != 0:
         raise UnsupportedMediaError(f"Audio decode failed: {proc.stderr.decode(errors='replace')[:200]}")
     samples = np.frombuffer(proc.stdout, dtype=np.float32)
-    return AudioSignal(samples=samples, sample_rate=16000, duration_s=len(samples) / 16000.0, container="ffmpeg")
+    return AudioSignal(
+        samples=samples, sample_rate=16000, duration_s=len(samples) / 16000.0, container="ffmpeg"
+    )
 
 
 # ---------------------------------------------------------------------- video
@@ -412,9 +418,23 @@ def write_mjpeg_avi(path: str | Path, frames: list, fps: int = 10) -> None:
     #                  dwSampleSize,rcFrame(left,top,right,bottom)
     strh_data = struct.pack(
         "<4s4sIHHIIIIIIII4h",
-        b"vids", b"MJPG", 0, 0, 0, 0,
-        1, fps, 0, len(jpeg_blobs), max_blob, 0xFFFFFFFF, 0,
-        0, 0, width, height,
+        b"vids",
+        b"MJPG",
+        0,
+        0,
+        0,
+        0,
+        1,
+        fps,
+        0,
+        len(jpeg_blobs),
+        max_blob,
+        0xFFFFFFFF,
+        0,
+        0,
+        0,
+        width,
+        height,
     )
     strh = b"strh" + struct.pack("<I", len(strh_data)) + strh_data
     # BITMAPINFOHEADER

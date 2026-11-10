@@ -34,7 +34,7 @@ Four claims, each with its own witness and each with a way to fake it:
       --expect-fail       accepted for symmetry with the other e2e scripts; with `--mutate` the
                           contract is already "exit 0 iff the mutation was caught"
       --keep              leave the built tags in place for debugging
-  """
+"""
 
 from __future__ import annotations
 
@@ -167,8 +167,15 @@ def verify_image(tag: str, lock: dict[str, str], label: str) -> None:
         f"{label}: every installed package is pinned in the lock at that version",
         not offenders,
         f"{len(found)} installed, {len(offenders)} disagree"
-        + (": " + ", ".join(f"{n} installed {v}, lock says {lock.get(n, 'nothing')}"
-                              for n, v in sorted(offenders.items())[:6]) if offenders else ""),
+        + (
+            ": "
+            + ", ".join(
+                f"{n} installed {v}, lock says {lock.get(n, 'nothing')}"
+                for n, v in sorted(offenders.items())[:6]
+            )
+            if offenders
+            else ""
+        ),
     )
     stray = other_forms(freeze)
     check(f"{label}: no install form outside `name==version`", not stray, "; ".join(stray) or "all pins")
@@ -189,8 +196,21 @@ def verify_image(tag: str, lock: dict[str, str], label: str) -> None:
 def verify_licence_gate(tag: str) -> None:
     """Claim 4: FC-1 on the shipping platform, and proof the host scan cannot substitute for it."""
     rc, out = run_and_capture(
-        ["docker", "run", "--rm", "--entrypoint", "python", tag,
-         "-m", "synthverify.cli", "licenses", "--project-root", "/app", "--groups", "core,vision"]
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "python",
+            tag,
+            "-m",
+            "synthverify.cli",
+            "licenses",
+            "--project-root",
+            "/app",
+            "--groups",
+            "core,vision",
+        ]
     )
     lines = [line for line in out.splitlines()]
     header = next((line for line in lines if "FC-1 dependency licence scan" in line), "no header")
@@ -271,8 +291,14 @@ def mutate_offline(mode: str) -> bool:
         project.write_text(edited, encoding="utf-8")
         rc, out = run_and_capture(
             [
-                sys.executable, "-m", "synthverify.cli", "dependency-lock",
-                "--project-root", str(tmpdir), "--lock", str(LOCK_PATH),
+                sys.executable,
+                "-m",
+                "synthverify.cli",
+                "dependency-lock",
+                "--project-root",
+                str(tmpdir),
+                "--lock",
+                str(LOCK_PATH),
             ]
         )
         named = "pg8000" in out.lower() and "UNPINNED" in out
@@ -289,8 +315,12 @@ def _issue(out: str, needle: str) -> str:
 
 
 def _mutation_verdict(caught: bool, mode: str) -> int:
-    print("RESULT:", f"MUTATION CAUGHT ({mode})" if caught
-          else f"MUTATION NOT CAUGHT ({mode} reached the artifact and the gate accepted it)")
+    print(
+        "RESULT:",
+        f"MUTATION CAUGHT ({mode})"
+        if caught
+        else f"MUTATION NOT CAUGHT ({mode} reached the artifact and the gate accepted it)",
+    )
     return 0 if caught else 1
 
 
@@ -309,8 +339,11 @@ def main() -> int:
     try:
         pins, issues = read_lock(LOCK_PATH)
         lock = {key: pin.version for key, pin in pins.items()}
-        check("the committed lock parses as pins only", not issues, f"{len(lock)} pins"
-              + (f"; {issues[0].detail}" if issues else ""))
+        check(
+            "the committed lock parses as pins only",
+            not issues,
+            f"{len(lock)} pins" + (f"; {issues[0].detail}" if issues else ""),
+        )
 
         if args.mutate in ("bump-pin", "new-dep"):
             caught = mutate_offline(args.mutate)
@@ -319,7 +352,11 @@ def main() -> int:
             if args.mutate == "doctored-pin":
                 text = LOCK_PATH.read_text(encoding="utf-8")
                 doctored = re.sub(
-                    rf"^{SAMPLE_PACKAGE}==\S+$", f"{SAMPLE_PACKAGE}=={SAMPLE_DOCTORED}", text, count=1, flags=re.M
+                    rf"^{SAMPLE_PACKAGE}==\S+$",
+                    f"{SAMPLE_PACKAGE}=={SAMPLE_DOCTORED}",
+                    text,
+                    count=1,
+                    flags=re.M,
                 )
             tag = "synthverify:lock-mut"
             tags.append(tag)
@@ -336,8 +373,11 @@ def main() -> int:
             check(
                 f"{args.mutate}: the image installed what the injected file said (so `-c` is wired, "
                 "not decorative)",
-                installed is not None and (
-                    installed == SAMPLE_DOCTORED if args.mutate == "doctored-pin" else installed != lock[SAMPLE_PACKAGE]
+                installed is not None
+                and (
+                    installed == SAMPLE_DOCTORED
+                    if args.mutate == "doctored-pin"
+                    else installed != lock[SAMPLE_PACKAGE]
                 ),
                 f"{SAMPLE_PACKAGE} in the image: {installed}; committed pin: {lock[SAMPLE_PACKAGE]}",
             )
@@ -358,7 +398,11 @@ def main() -> int:
                 "two cold builds print byte-identical `pip freeze --all`",
                 freeze_a == freeze_b and rc_a == rc_b == 0,
                 f"{len(freeze_a.splitlines())} lines each"
-                + ("" if freeze_a == freeze_b else f"; {len(set(freeze_a.splitlines()) ^ set(freeze_b.splitlines()))} differ"),
+                + (
+                    ""
+                    if freeze_a == freeze_b
+                    else f"; {len(set(freeze_a.splitlines()) ^ set(freeze_b.splitlines()))} differ"
+                ),
             )
             if freeze_a != freeze_b:
                 diff = sorted(set(freeze_a.splitlines()) ^ set(freeze_b.splitlines()))
@@ -368,17 +412,34 @@ def main() -> int:
             verify_licence_gate(tag_a)
             dockerfile = DOCKERFILE.read_text(encoding="utf-8")
             wired = any(
-                line.lstrip().startswith("RUN") and "pip install" in line and "-c requirements-lock.txt" in line
+                line.lstrip().startswith("RUN")
+                and "pip install" in line
+                and "-c requirements-lock.txt" in line
                 for line in dockerfile.splitlines()
             )
-            check("the Dockerfile consumes the lock as a constraint", wired, "pip install -c requirements-lock.txt")
+            check(
+                "the Dockerfile consumes the lock as a constraint",
+                wired,
+                "pip install -c requirements-lock.txt",
+            )
     finally:
         if not args.keep:
             for tag in tags:
                 run(["docker", "rmi", "-f", tag])
-        left = run(["docker", "images", "--filter", "reference=synthverify:lock-*", "--format", "{{.Repository}}:{{.Tag}}"])
-        print(f"images left behind: {left.stdout.strip() or 'none'}"
-              + ("" if args.keep else " (this run removed its own tags)"))
+        left = run(
+            [
+                "docker",
+                "images",
+                "--filter",
+                "reference=synthverify:lock-*",
+                "--format",
+                "{{.Repository}}:{{.Tag}}",
+            ]
+        )
+        print(
+            f"images left behind: {left.stdout.strip() or 'none'}"
+            + ("" if args.keep else " (this run removed its own tags)")
+        )
 
     print(f"\n{len(CHECKS)} checks passed, {len(FAILURES)} failed")
     for line in FAILURES:

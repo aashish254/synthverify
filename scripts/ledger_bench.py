@@ -404,7 +404,8 @@ def drive(name: str, url: str, args: argparse.Namespace, *, key: str, **extra: o
         capture_output=True,
         text=True,
         timeout=3600,
-        check=False, encoding="utf-8",
+        check=False,
+        encoding="utf-8",
     )
     if proc.returncode != 0:
         raise SystemExit(f"phase {name} {extra} failed:\n{proc.stdout[-1500:]}\n{proc.stderr[-4000:]}")

@@ -163,9 +163,7 @@ class VerificationReport:
     #: media type we do not parse); the shape is ``ProvenanceResult.to_dict()`` when present.
     provenance: dict[str, Any] | None = None
     schema_version: str = REPORT_SCHEMA
-    generated_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    generated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -326,7 +324,10 @@ def _route(
                 "A high-confidence detector self-reports near-certain synthetic origin "
                 "(e.g. generation tool signature); policy blocks automatically.",
             )
-        return ("BLOCK", f"Fused risk {fused:.2f} meets or exceeds the block threshold {policy.block_score:.2f}.")
+        return (
+            "BLOCK",
+            f"Fused risk {fused:.2f} meets or exceeds the block threshold {policy.block_score:.2f}.",
+        )
     if fused >= policy.escalate_score or len(alarms) >= 3:
         return (
             "ESCALATE",
@@ -354,11 +355,7 @@ def _rank_evidence(ran: list[DetectorResult], limit: int = 6) -> list[str]:
 
     weights = {name: det.weight for name, det in all_detectors().items()}
     scored = sorted(
-        (
-            (weights.get(r.detector, 1.0) * r.score * r.confidence, r)
-            for r in ran
-            if r.findings
-        ),
+        ((weights.get(r.detector, 1.0) * r.score * r.confidence, r) for r in ran if r.findings),
         key=lambda pair: pair[0],
         reverse=True,
     )
@@ -380,7 +377,9 @@ def _unique(items) -> list[str]:
     return out
 
 
-def _summary(fused: float, tier: RiskTier, media_type: str, filename: str, action: str, conclusive: bool) -> str:
+def _summary(
+    fused: float, tier: RiskTier, media_type: str, filename: str, action: str, conclusive: bool
+) -> str:
     tier_txt = {
         RiskTier.LOW: "no significant synthetic-media indicators",
         RiskTier.MEDIUM: "moderate synthetic-media indicators",
@@ -388,10 +387,7 @@ def _summary(fused: float, tier: RiskTier, media_type: str, filename: str, actio
         RiskTier.CRITICAL: "near-certain synthetic origin or severe tampering",
     }[tier]
     if not conclusive:
-        return (
-            f"'{filename}' could not be assessed conclusively ({media_type}); "
-            "manual review is required."
-        )
+        return f"'{filename}' could not be assessed conclusively ({media_type}); manual review is required."
     return (
         f"'{filename}' ({media_type}) shows {tier_txt} "
         f"(fused risk {fused:.2f}/1.00). Recommended workflow action: {action}."

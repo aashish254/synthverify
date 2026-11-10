@@ -26,9 +26,14 @@ def _fingerprint(settings) -> tuple[str, ...]:
     backend = (settings.media_store or "local").strip().lower()
     if backend == "s3":
         return (
-            "s3", str(settings.s3_endpoint), str(settings.s3_bucket), str(settings.s3_region),
-            "path" if settings.s3_path_style else "vhost", str(settings.s3_prefix),
-            str(settings.s3_access_key), str(settings.s3_secret_key),
+            "s3",
+            str(settings.s3_endpoint),
+            str(settings.s3_bucket),
+            str(settings.s3_region),
+            "path" if settings.s3_path_style else "vhost",
+            str(settings.s3_prefix),
+            str(settings.s3_access_key),
+            str(settings.s3_secret_key),
         )
     return (backend, str(settings.storage_dir))
 

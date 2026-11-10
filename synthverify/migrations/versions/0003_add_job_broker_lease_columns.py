@@ -29,6 +29,7 @@ down_revision: str | None = "0002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+
 def _columns() -> dict[str, sa.Column]:
     """Fresh ``Column`` objects per call - Alembic mutates what it is handed."""
     return {

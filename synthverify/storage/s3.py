@@ -53,8 +53,9 @@ class S3Credentials:
         self.access_key = access_key
         self.secret_key = secret_key
 
-    def authorization(self, *, method: str, uri: str, payload: bytes, host: str,
-                      region: str, when: datetime) -> dict[str, str]:
+    def authorization(
+        self, *, method: str, uri: str, payload: bytes, host: str, region: str, when: datetime
+    ) -> dict[str, str]:
         """SigV4 headers for one request. See AWS 'Signature Version 4' process."""
         amz_date = when.strftime("%Y%m%dT%H%M%SZ")
         date_stamp = amz_date[:8]
@@ -66,7 +67,9 @@ class S3Credentials:
         }
         signed_headers = ";".join(sorted(headers))
         canonical_headers = "".join(f"{name}:{headers[name]}\n" for name in sorted(headers))
-        canonical_request = "\n".join([method.upper(), uri, "", canonical_headers, signed_headers, payload_hash])
+        canonical_request = "\n".join(
+            [method.upper(), uri, "", canonical_headers, signed_headers, payload_hash]
+        )
         scope = f"{date_stamp}/{region}/s3/aws4_request"
         string_to_sign = "\n".join(
             ["AWS4-HMAC-SHA256", amz_date, scope, _sha256_hex(canonical_request.encode())]
@@ -196,8 +199,12 @@ class S3MediaStore(MediaStore):
         path = f"/{self.bucket}/{object_key}" if self.path_style else f"/{object_key}"
         url = f"{self.scheme}://{self.host}{path}"
         headers = self._credentials.authorization(
-            method=method, uri=path, payload=payload, host=self.host,
-            region=self.region, when=datetime.now(UTC),
+            method=method,
+            uri=path,
+            payload=payload,
+            host=self.host,
+            region=self.region,
+            when=datetime.now(UTC),
         )
         headers["content-type"] = "application/octet-stream"
         try:

@@ -82,7 +82,10 @@ class TextStylometryDetector(Detector):
 
         stock_hits = [p for p in AI_STOCK_PHRASES if p in lower]
         stock_rate = len(stock_hits)
-        connectives = sum(lower.count(p) for p in ("furthermore,", "moreover,", "additionally,", "in conclusion,", "however,"))
+        connectives = sum(
+            lower.count(p)
+            for p in ("furthermore,", "moreover,", "additionally,", "in conclusion,", "however,")
+        )
         hedge_count = sum(len(re.findall(rf"\b{h}\b", lower)) for h in HEDGES)
         hedge_density = hedge_count / len(words)
         connective_density = connectives / len(sentences)

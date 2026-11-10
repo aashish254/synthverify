@@ -214,17 +214,15 @@ class TestDetectorIntegration:
 
 class TestAuditTrail:
     async def _audit_verdicts(self, client, action):
-        items = (
-            await client.get(f"{API}/admin/audit", params={"action": action, "limit": 50})
-        ).json()["items"]
+        items = (await client.get(f"{API}/admin/audit", params={"action": action, "limit": 50})).json()[
+            "items"
+        ]
         return [i["detail"]["verdict"] for i in items]
 
     async def test_sync_analyze_reports_and_ledgers_the_verdict(self, client):
         import fixtures_c2pa as f
 
-        resp = await client.post(
-            f"{API}/media/analyze", files={"file": ("good.jpg", f.valid_jpeg())}
-        )
+        resp = await client.post(f"{API}/media/analyze", files={"file": ("good.jpg", f.valid_jpeg())})
         assert resp.status_code == 200
         assert resp.json()["provenance"]["verdict"] == ProvenanceVerdict.AUTHENTIC.value
 
@@ -234,9 +232,7 @@ class TestAuditTrail:
     async def test_tampered_asset_records_invalid_in_the_ledger(self, client):
         import fixtures_c2pa as f
 
-        resp = await client.post(
-            f"{API}/media/analyze", files={"file": ("bad.jpg", f.claim_mutated_jpeg())}
-        )
+        resp = await client.post(f"{API}/media/analyze", files={"file": ("bad.jpg", f.claim_mutated_jpeg())})
         assert resp.json()["provenance"]["verdict"] == ProvenanceVerdict.INVALID.value
         verdicts = await self._audit_verdicts(client, "provenance.validated")
         assert ProvenanceVerdict.INVALID.value in verdicts
@@ -244,34 +240,24 @@ class TestAuditTrail:
     async def test_absent_manifest_records_stripped_in_the_ledger(self, client):
         import fixtures_c2pa as f
 
-        await client.post(
-            f"{API}/media/analyze", files={"file": ("none.jpg", f.stripped())}
-        )
+        await client.post(f"{API}/media/analyze", files={"file": ("none.jpg", f.stripped())})
         verdicts = await self._audit_verdicts(client, "provenance.validated")
         assert ProvenanceVerdict.STRIPPED.value in verdicts
 
     async def test_async_ingest_writes_the_provenance_event(self, client):
         import fixtures_c2pa as f
 
-        job = (
-            await client.post(
-                f"{API}/media/ingest", files={"file": ("good.jpg", f.valid_jpeg())}
-            )
-        ).json()
+        job = (await client.post(f"{API}/media/ingest", files={"file": ("good.jpg", f.valid_jpeg())})).json()
         done = await wait_for_job(client, job["job_id"])
         assert done["result"]["provenance"]["verdict"] == ProvenanceVerdict.AUTHENTIC.value
         verdicts = await self._audit_verdicts(client, "provenance.validated")
         assert ProvenanceVerdict.AUTHENTIC.value in verdicts
 
     async def test_audio_runs_no_provenance_check_and_writes_no_event(self, client):
-        resp = await client.post(
-            f"{API}/media/analyze", files={"file": ("a.wav", natural_speech())}
-        )
+        resp = await client.post(f"{API}/media/analyze", files={"file": ("a.wav", natural_speech())})
         assert resp.status_code == 200
         assert resp.json()["provenance"] is None
         assert "provenance.validated" not in [
             i["action"]
-            for i in (
-                await client.get(f"{API}/admin/audit", params={"limit": 100})
-            ).json()["items"]
+            for i in (await client.get(f"{API}/admin/audit", params={"limit": 100})).json()["items"]
         ]

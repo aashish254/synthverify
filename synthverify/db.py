@@ -686,7 +686,7 @@ class AuditLedger:
         ).scalar_one_or_none()
         evt = AuditEvent(
             event_id=_uuid(),  # set explicitly: defaults only fire at flush,
-            ts=utcnow(),       # and the hash must commit to the real values
+            ts=utcnow(),  # and the hash must commit to the real values
             actor=actor,
             action=action,
             resource=resource,
@@ -732,9 +732,7 @@ class AuditLedger:
         ).scalar_one_or_none()
         prev_seq = prev.seq if prev else 0
         in_range = self.session.execute(
-            select(func.count(AuditEvent.seq)).where(
-                AuditEvent.seq > prev_seq, AuditEvent.seq <= seq
-            )
+            select(func.count(AuditEvent.seq)).where(AuditEvent.seq > prev_seq, AuditEvent.seq <= seq)
         ).scalar_one()
         ckpt = AuditCheckpoint(
             seq=seq,
@@ -900,8 +898,7 @@ class AuditLedger:
                     if ckpt.chain_hash != ckpt.compute_hash():
                         return fail(
                             evt.seq,
-                            f"checkpoint hash mismatch at seq={ckpt.seq}: the sealed record was "
-                            "altered",
+                            f"checkpoint hash mismatch at seq={ckpt.seq}: the sealed record was altered",
                         )
                     # A seal also states *how many* rows its range holds, which the walk can answer
                     # independently of every hash: this is the one check that still fires when a
@@ -1021,7 +1018,9 @@ def alembic_config(database_url: str | None = None):
     return cfg
 
 
-def upgrade_schema(database_url: str | None = None, *, revision: str = "head", sql_only: bool = False) -> None:
+def upgrade_schema(
+    database_url: str | None = None, *, revision: str = "head", sql_only: bool = False
+) -> None:
     """Apply pending migrations - the deploy-time alternative to ``create_all()``."""
     from alembic import command
 
