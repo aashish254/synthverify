@@ -56,7 +56,7 @@ numpy==2.4.6
 opencv-python==4.14.0.94
 packaging==26.3
 pathspec==1.1.1
-pillow==12.3.0
+pillow==13.0.0
 pluggy==1.6.0
 pycparser==3.0
 pydantic==2.13.4
